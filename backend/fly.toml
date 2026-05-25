@@ -1,0 +1,20 @@
+app = "konten-yoel"
+primary_region = "sin"
+
+[build]
+
+[env]
+  APP_ENV = "production"
+  LOG_LEVEL = "info"
+  TZ = "Asia/Jakarta"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

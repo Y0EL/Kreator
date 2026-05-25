@@ -82,6 +82,14 @@ async def _generate_and_send(story_id: int, note: str | None = None) -> None:
         log.warning("bot.pdf_failed", story_id=story_id, error=str(e))
 
 
+async def _safe_generate(story_id: int, note: str | None = None) -> None:
+    try:
+        await _generate_and_send(story_id, note)
+    except Exception as e:
+        log.error("bot.generate_failed", story_id=story_id, error=str(e))
+        await send_text(f"Gagal generate story {story_id}: {e}")
+
+
 @dp.callback_query(F.data.startswith("act:approve:"))
 async def on_approve(cb: CallbackQuery) -> None:
     story_id = _story_id(cb.data or "")
@@ -89,11 +97,7 @@ async def on_approve(cb: CallbackQuery) -> None:
     if cb.message:
         await cb.message.edit_text((cb.message.text or "") + "\n\n✅ Disetujui. Sedang digarap...")
     await _set_decision(story_id, Decision.approve, StoryStatus.approved)
-    try:
-        await _generate_and_send(story_id)
-    except Exception as e:
-        log.error("bot.generate_failed", story_id=story_id, error=str(e))
-        await send_text(f"Gagal generate draft untuk story {story_id}: {e}")
+    asyncio.create_task(_safe_generate(story_id))
 
 
 @dp.callback_query(F.data.startswith("act:reject:"))
@@ -121,21 +125,16 @@ async def on_deep(cb: CallbackQuery) -> None:
     if cb.message:
         await cb.message.edit_text((cb.message.text or "") + "\n\n🔍 Deep research...")
     await _set_decision(story_id, Decision.deep_research, StoryStatus.researching)
-    try:
-        await _generate_and_send(story_id)
-    except Exception as e:
-        log.error("bot.deep_failed", story_id=story_id, error=str(e))
+    asyncio.create_task(_safe_generate(story_id))
 
 
 @dp.callback_query(F.data.startswith("draft:regen:"))
 async def on_regen(cb: CallbackQuery) -> None:
     story_id = _story_id(cb.data or "")
     await cb.answer("Regenerate draft, tunggu sebentar.")
-    try:
-        await _generate_and_send(story_id, note="versi sebelumnya kurang pas, tulis ulang yang lebih natural")
-    except Exception as e:
-        log.error("bot.regen_failed", story_id=story_id, error=str(e))
-        await send_text(f"Gagal regenerate story {story_id}: {e}")
+    asyncio.create_task(
+        _safe_generate(story_id, note="versi sebelumnya kurang pas, tulis ulang lebih natural")
+    )
 
 
 @dp.callback_query(F.data.startswith("draft:ok:"))
