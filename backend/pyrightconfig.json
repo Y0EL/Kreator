@@ -1,0 +1,8 @@
+{
+  "include": ["app", "tests", "alembic"],
+  "extraPaths": ["."],
+  "executionEnvironments": [{ "root": "." }],
+  "reportMissingImports": "warning",
+  "venvPath": ".",
+  "venv": ".venv"
+}
