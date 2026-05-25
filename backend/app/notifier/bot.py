@@ -165,7 +165,11 @@ async def on_message(msg: Message) -> None:
         return
     try:
         async with ChatActionSender.typing(bot=msg.bot, chat_id=msg.chat.id):
-            reply = await run_admin_agent(text) if is_owner else await _plain_chat(text)
+            reply = (
+                await run_admin_agent(msg.chat.id, text)
+                if is_owner
+                else await _plain_chat(text)
+            )
     except Exception as e:
         log.error("bot.message_failed", error=str(e))
         reply = "Waduh error pas ngeproses, coba lagi ya. 😵"

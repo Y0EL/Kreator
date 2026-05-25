@@ -6,6 +6,7 @@ import json
 import httpx
 from sqlalchemy import func, select
 
+from app.agents.memory import append_turn, load_history, maybe_compact
 from app.config import get_settings
 from app.db.enums import SourceStatus, SourceType, StoryStatus
 from app.db.models import CandidateQueue, Knowledge, RawItem, Source, Story, StoryScore
@@ -184,9 +185,23 @@ async def _ingest_youtube(video: str) -> str:
     return await generate_and_deliver(story_id)
 
 
+async def _safe_ingest(video: str) -> None:
+    from app.notifier.telegram import send_text
+
+    try:
+        await _ingest_youtube(video)
+    except Exception as e:
+        log.error("ingest.failed", video=video, error=str(e))
+        await send_text(f"Gagal proses video: {e}")
+
+
 async def _exec(name: str, args: dict) -> str:
     if name == "ingest_youtube":
-        return await _ingest_youtube(args.get("video", ""))
+        asyncio.create_task(_safe_ingest(args.get("video", "")))
+        return (
+            "Oke, video lagi gue garap di background (transkrip, riset, bikin draft). "
+            "Draftnya nanti otomatis masuk grup ya."
+        )
     async with SessionLocal() as session:
         if name == "list_sources":
             rows = (await session.scalars(select(Source))).all()
@@ -329,16 +344,17 @@ def _serialize_assistant(msg) -> dict:
     return out
 
 
-async def run_admin_agent(user_text: str) -> str:
-    messages: list = [
-        {"role": "system", "content": ADMIN_SYSTEM},
-        {"role": "user", "content": user_text},
-    ]
+async def run_admin_agent(chat_id: int, user_text: str) -> str:
+    history = await load_history(chat_id)
+    messages: list = [{"role": "system", "content": ADMIN_SYSTEM}, *history,
+                      {"role": "user", "content": user_text}]
+    reply = "Kebanyakan langkah, gue stop dulu."
     for _ in range(5):
         resp = await asyncio.to_thread(client.chat_raw, messages, TOOLS)
         msg = resp.choices[0].message  # type: ignore[union-attr]
         if not getattr(msg, "tool_calls", None):
-            return msg.content or "(kosong)"
+            reply = msg.content or "(kosong)"
+            break
         messages.append(_serialize_assistant(msg))
         for tc in msg.tool_calls:
             try:
@@ -347,4 +363,8 @@ async def run_admin_agent(user_text: str) -> str:
                 args = {}
             result = await _exec(tc.function.name, args)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
-    return "Kebanyakan langkah, gue stop dulu."
+
+    await append_turn(chat_id, "user", user_text)
+    await append_turn(chat_id, "assistant", reply)
+    await maybe_compact(chat_id)
+    return reply

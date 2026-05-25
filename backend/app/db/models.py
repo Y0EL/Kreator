@@ -193,6 +193,15 @@ class VoiceProfile(Base, TimestampMixin):
     source_files: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
 
 
+class Conversation(Base, TimestampMixin):
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+
+
 class Knowledge(Base, TimestampMixin):
     __tablename__ = "knowledge"
 
