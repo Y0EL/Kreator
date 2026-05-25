@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     telegram_group_chat_id: str = ""
     telegram_webhook_secret: str = ""
     telegram_webhook_url: str = ""
+    owner_telegram_id: int = 0
 
     google_drive_folder_id: str = ""
     google_service_account_json: str = ""

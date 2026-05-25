@@ -12,6 +12,7 @@ class SourceType(str, enum.Enum):
     submission = "submission"
     mediawiki = "mediawiki"
     search = "search"
+    youtube = "youtube"
 
 
 class SourceStatus(str, enum.Enum):

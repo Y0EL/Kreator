@@ -5,6 +5,7 @@ from app.crawler.adapters.mediawiki import MediaWikiAdapter
 from app.crawler.adapters.openserp import OpenSerpAdapter
 from app.crawler.adapters.reddit import RedditAdapter
 from app.crawler.adapters.rss import RssAdapter
+from app.crawler.adapters.youtube import YouTubeAdapter
 from app.crawler.base import SourceAdapter
 from app.crawler.request_manager import RequestManager
 from app.db.enums import SourceType
@@ -18,6 +19,7 @@ _REGISTRY: dict[SourceType, type[SourceAdapter]] = {
     SourceType.media: GenericHtmlAdapter,
     SourceType.mediawiki: MediaWikiAdapter,
     SourceType.search: OpenSerpAdapter,
+    SourceType.youtube: YouTubeAdapter,
 }
 
 

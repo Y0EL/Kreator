@@ -51,6 +51,23 @@ def complete_json(*, system: str, user: str, tier: Tier = "cheap", **kw: Any) ->
     return _parse_json(raw)
 
 
+def chat_raw(messages: list, tools: list | None = None, tier: Tier = "quality"):
+    import litellm
+
+    litellm.drop_params = True
+    s = get_settings()
+    kwargs: dict[str, Any] = {
+        "model": _route(tier),
+        "messages": messages,
+        "api_key": s.openai_api_key,
+        "temperature": 0.3,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+    return litellm.completion(**kwargs)
+
+
 def embed(texts: list[str]) -> list[list[float]]:
     import litellm
 
@@ -60,6 +77,15 @@ def embed(texts: list[str]) -> list[list[float]]:
         model=s.llm_embedding_model, input=texts, api_key=s.openai_api_key
     )
     return [d["embedding"] for d in resp.data]  # type: ignore[union-attr]
+
+
+def transcribe(audio_path: str) -> str:
+    import litellm
+
+    s = get_settings()
+    with open(audio_path, "rb") as f:
+        resp = litellm.transcription(model="whisper-1", file=f, api_key=s.openai_api_key)
+    return getattr(resp, "text", "") or ""
 
 
 def _parse_json(raw: str) -> dict:

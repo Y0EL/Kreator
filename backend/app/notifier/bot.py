@@ -5,11 +5,13 @@ import re
 from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
+from app.agents.admin_agent import run_admin_agent
 from app.agents.script_pipeline import render_sources, rewrite_draft, run_full_generation
 from app.config import get_settings
+from app.llm import client
 from app.db.enums import Decision, StoryStatus
 from app.db.models import CandidateQueue, ResearchPack, Story
 from app.db.session import SessionLocal
@@ -19,6 +21,7 @@ from app.notifier.telegram import draft_keyboard, send_document, send_text
 
 log = get_logger(__name__)
 dp = Dispatcher()
+_BOT_USERNAME = "Y0ELBOT"
 
 
 def _slug(text: str) -> str:
@@ -140,6 +143,43 @@ async def on_regen(cb: CallbackQuery) -> None:
 @dp.callback_query(F.data.startswith("draft:ok:"))
 async def on_ok(cb: CallbackQuery) -> None:
     await cb.answer("Sip, dipakai. 👍")
+
+
+def _should_respond(msg: Message) -> bool:
+    if msg.chat.type == "private":
+        return True
+    text = msg.text or ""
+    if f"@{_BOT_USERNAME}".lower() in text.lower():
+        return True
+    reply = msg.reply_to_message
+    return bool(reply and reply.from_user and reply.from_user.is_bot)
+
+
+async def _plain_chat(text: str) -> str:
+    return await asyncio.to_thread(
+        client.complete,
+        system="Kamu chatbot ramah berbahasa Indonesia untuk grup. Jawab singkat dan sopan. "
+        "Kamu tidak punya akses admin apa pun.",
+        user=text,
+        tier="cheap",
+    )
+
+
+@dp.message(F.text)
+async def on_message(msg: Message) -> None:
+    if not _should_respond(msg):
+        return
+    text = (msg.text or "").replace(f"@{_BOT_USERNAME}", "").strip()
+    if not text:
+        return
+    owner_id = get_settings().owner_telegram_id
+    is_owner = bool(msg.from_user and owner_id and msg.from_user.id == owner_id)
+    try:
+        reply = await run_admin_agent(text) if is_owner else await _plain_chat(text)
+    except Exception as e:
+        log.error("bot.message_failed", error=str(e))
+        reply = "Maaf, ada error pas mproses."
+    await msg.reply(reply[:4000])
 
 
 async def main() -> None:

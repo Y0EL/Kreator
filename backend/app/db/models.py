@@ -193,6 +193,16 @@ class VoiceProfile(Base, TimestampMixin):
     source_files: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
 
 
+class Knowledge(Base, TimestampMixin):
+    __tablename__ = "knowledge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(300))
+    content: Mapped[str] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM), nullable=True)
+
+
 class VoiceExemplar(Base, TimestampMixin):
     __tablename__ = "voice_exemplars"
 

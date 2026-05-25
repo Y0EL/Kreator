@@ -31,6 +31,9 @@ dependencies = [
     # document export
     "python-docx>=1.1",
     "fpdf2>=2.8",
+    # youtube watcher (transcript + audio fallback)
+    "youtube-transcript-api>=0.6,<1.0",
+    "yt-dlp>=2024.8",
     # integrations
     "boto3>=1.35",                 # Cloudflare R2 (S3-compatible)
     "google-api-python-client>=2.149",
