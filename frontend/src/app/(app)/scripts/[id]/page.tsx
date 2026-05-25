@@ -5,6 +5,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { IconChevron, IconRefresh } from "@/components/icons";
+import { ActiveJobs } from "@/components/active-jobs";
+import { WebSearchToggle } from "@/components/web-toggle";
 import { Skeleton } from "@/components/ui";
 
 export default function ReaderPage() {
@@ -13,6 +15,7 @@ export default function ReaderPage() {
   const { data, loading } = useApi(() => api.scripts(id), [id]);
   const [v, setV] = useState(0);
   const [regen, setRegen] = useState(false);
+  const [web, setWeb] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const scripts = data || [];
@@ -22,7 +25,7 @@ export default function ReaderPage() {
     setRegen(true);
     setMsg(null);
     try {
-      await api.regenerate(id);
+      await api.regenerate(id, undefined, web);
       setMsg("Lagi nulis ulang. Versi baru nyusul ke grup Telegram, refresh bentar lagi.");
     } catch {
       setMsg("Gagal regenerate.");
@@ -55,6 +58,12 @@ export default function ReaderPage() {
           Regenerate
         </button>
       </div>
+
+      <div className="flex justify-end px-5 pb-1">
+        <WebSearchToggle on={web} set={setWeb} />
+      </div>
+
+      <ActiveJobs />
 
       {scripts.length > 1 && (
         <div className="flex gap-2 px-5 pb-3">

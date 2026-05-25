@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" fill="#0a0a0a"/>
-  <g fill="#ff2f2f" font-family="'Geist Mono', ui-monospace, monospace" font-weight="700">
-    <text x="256" y="300" text-anchor="middle" font-size="210" letter-spacing="-6">YL</text>
+  <g fill="none" stroke="#ff2f2f" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M170 186 L200 256 L230 186 M200 256 L200 326"/>
+    <path d="M270 186 L270 326 L342 326"/>
   </g>
-  <rect x="176" y="350" width="160" height="16" rx="8" fill="#ff2f2f"/>
+  <rect x="170" y="350" width="172" height="14" rx="7" fill="#ff2f2f"/>
 </svg>

@@ -53,15 +53,15 @@ export const api = {
   story: (id: number) => req<StoryDetail>(`/api/stories/${id}`),
   allScripts: () => req<ScriptListItem[]>("/api/scripts"),
   scripts: (id: number) => req<ScriptItem[]>(`/api/stories/${id}/scripts`),
-  decide: (id: number, action: string) =>
+  decide: (id: number, action: string, webSearch = false) =>
     req<{ ok: boolean }>(`/api/stories/${id}/decision`, {
       method: "POST",
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, web_search: webSearch }),
     }),
-  regenerate: (id: number, note?: string) =>
+  regenerate: (id: number, note?: string, webSearch = false) =>
     req<{ ok: boolean }>(`/api/stories/${id}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({ note }),
+      body: JSON.stringify({ note, web_search: webSearch }),
     }),
   sources: () => req<SourceItem[]>("/api/sources"),
   addSource: (body: { name: string; type: string; feed_url?: string; channels?: string[] }) =>
@@ -69,13 +69,14 @@ export const api = {
   patchSource: (id: number, body: { status?: string }) =>
     req<{ ok: boolean }>(`/api/sources/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteSource: (id: number) => req<{ ok: boolean }>(`/api/sources/${id}`, { method: "DELETE" }),
-  ingestYoutube: (video: string) =>
+  ingestYoutube: (video: string, webSearch = false) =>
     req<{ ok: boolean; msg: string }>("/api/ingest/youtube", {
       method: "POST",
-      body: JSON.stringify({ video }),
+      body: JSON.stringify({ video, web_search: webSearch }),
     }),
   action: (name: string) => req<{ ok: boolean }>(`/api/actions/${name}`, { method: "POST" }),
   youtubeStats: () => req<YtStat[]>("/api/youtube/stats"),
   jobs: () => req<Job[]>("/api/jobs"),
+  dismissJob: (id: string) => req<{ ok: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }),
   system: () => req<System>("/api/system"),
 };

@@ -19,16 +19,18 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60] or "draft"
 
 
-async def generate_and_deliver(story_id: int, note: str | None = None) -> str:
+async def generate_and_deliver(
+    story_id: int, note: str | None = None, web_search: bool = False
+) -> str:
     async with SessionLocal() as session:
         story = await session.get(Story, story_id)
         if story is None:
             await send_text("Cerita ga ketemu.")
             return "story not found"
         if note:
-            script = await rewrite_draft(session, story, note)
+            script = await rewrite_draft(session, story, note, web_search=web_search)
         else:
-            script = await run_full_generation(session, story)
+            script = await run_full_generation(session, story, web_search=web_search)
         pack = await session.scalar(select(ResearchPack).where(ResearchPack.story_id == story_id))
         sources = await render_sources(session, story, pack)
         story_title = story.title or "Untitled"

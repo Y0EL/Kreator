@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,17 +11,30 @@ from app.integrations import drive
 from app.llm import client
 from app.llm.prompts import RESEARCH_SYSTEM, RESEARCH_USER
 from app.logging import get_logger
+from app.services import progress
 from app.util.textfix import sanitize_script
 
 log = get_logger(__name__)
 _MAX_CHARS = 16000
 
 
-async def run_research(session: AsyncSession, story: Story) -> ResearchPack:
+async def run_research(
+    session: AsyncSession, story: Story, web_search: bool = False
+) -> ResearchPack:
     story.status = StoryStatus.researching
+    extra = ""
+    if web_search:
+        progress.step("Cari fakta di web", 60, story_id=story.id)
+        query = f"{story.title or ''}. {story.summary or story.cleaned_text[:600]}"
+        findings = await asyncio.to_thread(client.web_search, query)
+        if findings:
+            extra = (
+                "\n\nINFORMASI TAMBAHAN DARI WEB (utamakan ini bila lebih akurat dan terbaru):\n"
+                + findings
+            )
     data = client.complete_json(
         system=RESEARCH_SYSTEM,
-        user=RESEARCH_USER.format(text=story.cleaned_text[:_MAX_CHARS]),
+        user=RESEARCH_USER.format(text=story.cleaned_text[:_MAX_CHARS]) + extra,
         tier="quality",
         temperature=0.4,
     )

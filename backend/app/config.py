@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     llm_model_quality: str = "gpt-4o"
     llm_embedding_model: str = "text-embedding-3-small"
     llm_embedding_dim: int = 1536
+    web_search_model: str = "gpt-4o-search-preview"
+    tavily_api_key: str = ""
 
     telegram_bot_token: str = ""
     telegram_group_chat_id: str = ""

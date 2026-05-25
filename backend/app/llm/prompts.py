@@ -80,7 +80,14 @@ DRAFT_SYSTEM = (
     "punya', atau 'arsip terpotong'. Kalau ada bagian yang tidak pasti, sampaikan sebagai "
     "ketegangan dan misteri yang bikin penasaran, BUKAN sebagai daftar hal yang perlu "
     "dibuktikan. Pertanyaan menggantung dipakai untuk menanam rasa takut, diucapkan secara "
-    "naratif, bukan dinomori seperti checklist. Buka dengan caramu sendiri yang natural, dan "
+    "naratif, bukan dinomori seperti checklist. "
+    "ALUR WAJIB KRONOLOGIS seperti garis waktu, dari kejadian paling awal maju ke kemudian, "
+    "supaya penonton gampang mengikuti. Bertumpu pada KENYATAAN, JANGAN berimprovisasi atau "
+    "mengarang detail yang tidak ada di bahan. Pakai detail konkret yang nyata seperti nama "
+    "tempat, kota, tanggal, dan tahun bila tersedia, sebut dengan jelas. HINDARI bahasa yang "
+    "ambigu, mengawang, atau berbunga bunga. Pilih kalimat yang lugas, konkret, dan membumi. "
+    "Kalau sebuah detail tidak ada di bahan, jangan ditambah, lebih baik diam soal itu. "
+    "Buka dengan caramu sendiri yang natural, dan "
     "sebut SECARA SANTAI saja bahwa cerita ini kamu temukan di internet, tanpa nama situs, "
     "tanpa link, tanpa kata 'arsip' atau 'kiriman komunitas'. Serap ritme dan cara bercerita "
     "dari contoh teladan tanpa menyalin sapaan, branding, atau frasa khas mereka. DILARANG "
@@ -107,8 +114,11 @@ BAHAN CERITA:
 {evidence}
 
 Tulis mengalir natural per segmen, beri penanda [SEGMEN: nama] di tiap bagian. Kamu lagi
-cerita langsung ke penonton di malam hari, bukan baca laporan. Fokus ke suasana, emosi, dan
-rasa penasaran, bukan ke pembuktian fakta. Tanpa em dash, en dash, titik koma.
+cerita langsung ke penonton di malam hari, bukan baca laporan. Susun kejadian secara
+KRONOLOGIS seperti garis waktu, dari awal maju ke kemudian. Bertumpu pada kenyataan di bahan,
+sebut tempat, kota, tanggal, dan tahun yang nyata dengan jelas, JANGAN mengarang detail.
+Bahasa lugas dan membumi, hindari frasa ambigu atau berbunga bunga. Tanpa em dash, en dash,
+titik koma.
 """
 
 VOICE_CARD_SYSTEM = (

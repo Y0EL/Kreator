@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 from sqlalchemy import select
@@ -101,7 +102,15 @@ async def generate_draft(
         session, persona, query_embedding=story.embedding, k=5
     )
 
-    draft_text = client.complete(
+    target = max(800, int(minutes) * 170)
+
+    def _tick(partial: str) -> None:
+        tok = client.count_tokens(partial)
+        pct = 85 + min(9, int(9 * tok / target))
+        progress.step(f"Menulis draft, {tok} token", pct, story_id=story.id)
+
+    draft_text = await asyncio.to_thread(
+        client.complete_stream,
         system=DRAFT_SYSTEM,
         user=DRAFT_USER.format(
             minutes=minutes,
@@ -113,6 +122,7 @@ async def generate_draft(
         ),
         tier="quality",
         temperature=0.8,
+        on_progress=_tick,
     )
     draft_text = sanitize_script(draft_text)
 
@@ -144,11 +154,11 @@ async def generate_draft(
 
 
 async def run_full_generation(
-    session: AsyncSession, story: Story, persona: str | None = None
+    session: AsyncSession, story: Story, persona: str | None = None, web_search: bool = False
 ) -> Script:
     persona = await _pick_persona(session, persona)
     progress.step("Riset sumber", 64, story_id=story.id)
-    pack = await run_research(session, story)
+    pack = await run_research(session, story, web_search=web_search)
     progress.step("Menyusun outline", 76, story_id=story.id)
     outline = await generate_outline(story, pack)
     progress.step("Menulis draft", 85, story_id=story.id)
@@ -158,10 +168,19 @@ async def run_full_generation(
 
 
 async def rewrite_draft(
-    session: AsyncSession, story: Story, note: str, persona: str | None = None
+    session: AsyncSession,
+    story: Story,
+    note: str,
+    persona: str | None = None,
+    web_search: bool = False,
 ) -> Script:
     persona = await _pick_persona(session, persona)
-    pack = await session.scalar(select(ResearchPack).where(ResearchPack.story_id == story.id))
+    if web_search:
+        pack = await run_research(session, story, web_search=True)
+    else:
+        pack = await session.scalar(
+            select(ResearchPack).where(ResearchPack.story_id == story.id)
+        )
     progress.step("Menyusun outline", 76, story_id=story.id)
     outline = await generate_outline(story, pack)
     progress.step("Menulis ulang draft", 85, story_id=story.id)

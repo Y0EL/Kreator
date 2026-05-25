@@ -47,20 +47,22 @@ def _val(x: object):
     return getattr(x, "value", x) if x is not None else None
 
 
-async def _bg_generate(story_id: int, note: str | None = None) -> None:
+async def _bg_generate(story_id: int, note: str | None = None, web_search: bool = False) -> None:
     progress.start("draft", f"Story {story_id}")
     progress.step("Menyiapkan draft", 30, story_id=story_id)
     try:
-        await generate_and_deliver(story_id, note)
+        await generate_and_deliver(story_id, note, web_search=web_search)
     except Exception as e:
         progress.fail(str(e))
         log.error("api.generate_failed", story_id=story_id, error=str(e))
 
 
-async def _bg_ingest(video: str, target_minutes: int | None = None) -> None:
+async def _bg_ingest(
+    video: str, target_minutes: int | None = None, web_search: bool = False
+) -> None:
     progress.start("youtube", video)
     try:
-        await ingest_youtube(video, target_minutes)
+        await ingest_youtube(video, target_minutes, web_search=web_search)
     except Exception as e:
         progress.fail(str(e))
         log.error("api.ingest_failed", video=video, error=str(e))
@@ -207,6 +209,7 @@ async def story_detail(story_id: int, session: AsyncSession = Depends(get_sessio
 
 class DecisionBody(BaseModel):
     action: str
+    web_search: bool = False
 
 
 @router.post("/stories/{story_id}/decision")
@@ -235,17 +238,20 @@ async def decide(
         story.status = status
     await session.commit()
     if body.action in ("approve", "deep"):
-        asyncio.create_task(_bg_generate(story_id))
+        asyncio.create_task(_bg_generate(story_id, web_search=body.web_search))
     return {"ok": True, "action": body.action}
 
 
 class RegenBody(BaseModel):
     note: str | None = None
+    web_search: bool = False
 
 
 @router.post("/stories/{story_id}/regenerate")
 async def regenerate(story_id: int, body: RegenBody) -> dict:
-    asyncio.create_task(_bg_generate(story_id, body.note or "tulis ulang lebih natural"))
+    asyncio.create_task(
+        _bg_generate(story_id, body.note or "tulis ulang lebih natural", web_search=body.web_search)
+    )
     return {"ok": True, "started": True}
 
 
@@ -399,17 +405,23 @@ async def delete_source(
 class IngestBody(BaseModel):
     video: str
     target_minutes: int | None = None
+    web_search: bool = False
 
 
 @router.post("/ingest/youtube")
 async def ingest(body: IngestBody) -> dict:
-    asyncio.create_task(_bg_ingest(body.video, body.target_minutes))
+    asyncio.create_task(_bg_ingest(body.video, body.target_minutes, web_search=body.web_search))
     return {"ok": True, "msg": "video lagi diproses di background, draft nyusul"}
 
 
 @router.get("/jobs")
 async def jobs() -> list[dict]:
     return progress.snapshot()
+
+
+@router.delete("/jobs/{job_id}")
+async def dismiss_job(job_id: str) -> dict:
+    return {"ok": progress.dismiss(job_id)}
 
 
 @router.get("/system")

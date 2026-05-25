@@ -14,6 +14,7 @@ import {
   IconX,
 } from "@/components/icons";
 import { ConfidenceTag, PriorityTag, Score, ScoreBars, Skeleton } from "@/components/ui";
+import { WebSearchToggle } from "@/components/web-toggle";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -45,11 +46,12 @@ export default function StoryPage() {
   const { data: s, loading } = useApi(() => api.story(id), [id]);
   const [acting, setActing] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [web, setWeb] = useState(false);
 
   async function decide(action: string) {
     setActing(action);
     try {
-      await api.decide(id, action);
+      await api.decide(id, action, web);
       setDone(action);
     } catch {
       /* ignore */
@@ -99,6 +101,10 @@ export default function StoryPage() {
         </div>
       ) : (
         <div className="px-5 pt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <WebSearchToggle on={web} set={setWeb} />
+            <span className="text-[11px] text-faint">info terbaru, agak lebih mahal</span>
+          </div>
           <button
             onClick={() => decide("approve")}
             disabled={!!acting}

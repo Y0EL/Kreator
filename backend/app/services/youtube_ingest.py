@@ -21,7 +21,9 @@ from app.util.hashing import content_hash
 log = get_logger(__name__)
 
 
-async def ingest_youtube(video: str, target_minutes: int | None = None) -> str:
+async def ingest_youtube(
+    video: str, target_minutes: int | None = None, web_search: bool = False
+) -> str:
     s = get_settings()
     if not s.youtube_api_key:
         return "YOUTUBE_API_KEY belum di-set."
@@ -104,4 +106,4 @@ async def ingest_youtube(video: str, target_minutes: int | None = None) -> str:
         progress.fail("Gagal proses jadi cerita.")
         return "Gagal proses jadi cerita."
     progress.step("Menyiapkan draft", 58, story_id=story_id, title=title)
-    return await generate_and_deliver(story_id)
+    return await generate_and_deliver(story_id, web_search=web_search)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Job } from "@/lib/types";
 import { IconCheck, IconSpinner, IconX } from "@/components/icons";
@@ -15,6 +15,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export function ActiveJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const dismissed = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -24,7 +25,7 @@ export function ActiveJobs() {
       let anyRunning = false;
       try {
         const data = await api.jobs();
-        if (alive) setJobs(data);
+        if (alive) setJobs(data.filter((j) => !dismissed.current.has(j.id)));
         anyRunning = data.some((j) => j.status === "running");
       } catch {
         /* ignore */
@@ -39,6 +40,12 @@ export function ActiveJobs() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function dismiss(id: string) {
+    dismissed.current.add(id);
+    setJobs((prev) => prev.filter((j) => j.id !== id));
+    api.dismissJob(id).catch(() => {});
+  }
 
   if (jobs.length === 0) return null;
 
@@ -65,6 +72,13 @@ export function ActiveJobs() {
               <span className={`tnum text-sm font-semibold ${err ? "text-accent" : "text-fg"}`}>
                 {err ? "Gagal" : `${j.percent}%`}
               </span>
+              <button
+                onClick={() => dismiss(j.id)}
+                aria-label="Tutup notifikasi"
+                className="tap -my-1 -mr-1 flex h-7 w-7 items-center justify-center rounded-lg text-faint active:bg-surface-2"
+              >
+                <IconX size={14} />
+              </button>
             </div>
 
             {!err && (

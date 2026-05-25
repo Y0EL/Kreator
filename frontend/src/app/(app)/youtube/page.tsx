@@ -5,12 +5,14 @@ import { api } from "@/lib/api";
 import { compact, useApi } from "@/lib/use-api";
 import { IconPlus, IconSpinner } from "@/components/icons";
 import { ActiveJobs } from "@/components/active-jobs";
+import { WebSearchToggle } from "@/components/web-toggle";
 import { Empty, PageHeader, Skeleton } from "@/components/ui";
 
 export default function YoutubePage() {
   const stats = useApi(() => api.youtubeStats(), []);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [web, setWeb] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function ingest() {
@@ -18,7 +20,7 @@ export default function YoutubePage() {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await api.ingestYoutube(url.trim());
+      const r = await api.ingestYoutube(url.trim(), web);
       setMsg(r.msg || "Diproses di background.");
       setUrl("");
     } catch {
@@ -50,6 +52,10 @@ export default function YoutubePage() {
           >
             {busy ? <IconSpinner size={18} className="animate-spin" /> : <IconPlus size={18} />}
           </button>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <WebSearchToggle on={web} set={setWeb} />
+          <span className="text-[11px] text-faint">info terbaru, agak lebih mahal</span>
         </div>
         {msg && <p className="mt-2 text-xs text-muted">{msg}</p>}
       </div>

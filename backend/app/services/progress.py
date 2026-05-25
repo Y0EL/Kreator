@@ -75,6 +75,11 @@ def done(title: str | None = None) -> None:
             j["updated_at"] = time.time()
 
 
+def dismiss(jid: str) -> bool:
+    with _lock:
+        return _jobs.pop(jid, None) is not None
+
+
 def snapshot() -> list[dict]:
     now = time.time()
     with _lock:
