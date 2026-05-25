@@ -13,4 +13,6 @@ secrets/
 .pytest_cache/
 .ruff_cache/
 *.log
+_*.txt
+_flytoken.txt
 .DS_Store

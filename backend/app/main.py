@@ -28,6 +28,7 @@ async def lifespan(_: FastAPI):
             settings.telegram_webhook_url,
             secret_token=settings.telegram_webhook_secret or None,
             drop_pending_updates=True,
+            allowed_updates=["message", "callback_query"],
         )
         log.info("webhook.set", url=settings.telegram_webhook_url)
     scheduler = build_scheduler()

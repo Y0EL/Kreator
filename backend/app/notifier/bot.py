@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.chat_action import ChatActionSender
 from sqlalchemy import select
 
 from app.agents.admin_agent import run_admin_agent
@@ -158,8 +159,8 @@ def _should_respond(msg: Message) -> bool:
 async def _plain_chat(text: str) -> str:
     return await asyncio.to_thread(
         client.complete,
-        system="Kamu chatbot ramah berbahasa Indonesia untuk grup. Jawab singkat dan sopan. "
-        "Kamu tidak punya akses admin apa pun.",
+        system="Lo chatbot santai buat grup, ngobrol akrab pakai bahasa sehari-hari, jangan "
+        "kaku, jangan pakai 'saya/anda'. Jawab singkat. Lo ga punya akses admin apa pun.",
         user=text,
         tier="cheap",
     )
@@ -175,10 +176,11 @@ async def on_message(msg: Message) -> None:
     owner_id = get_settings().owner_telegram_id
     is_owner = bool(msg.from_user and owner_id and msg.from_user.id == owner_id)
     try:
-        reply = await run_admin_agent(text) if is_owner else await _plain_chat(text)
+        async with ChatActionSender.typing(bot=msg.bot, chat_id=msg.chat.id):
+            reply = await run_admin_agent(text) if is_owner else await _plain_chat(text)
     except Exception as e:
         log.error("bot.message_failed", error=str(e))
-        reply = "Maaf, ada error pas mproses."
+        reply = "Waduh error pas ngeproses, coba lagi ya."
     await msg.reply(reply[:4000])
 
 
