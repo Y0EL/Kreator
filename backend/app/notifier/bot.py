@@ -19,6 +19,7 @@ from app.db.session import SessionLocal
 from app.export.document import build_docx, build_pdf
 from app.logging import configure_logging, get_logger
 from app.notifier.telegram import draft_keyboard, send_document, send_text
+from app.util.textfix import sanitize_script
 
 log = get_logger(__name__)
 dp = Dispatcher()
@@ -146,14 +147,37 @@ async def on_ok(cb: CallbackQuery) -> None:
     await cb.answer("Sip, dipakai. 👍")
 
 
-def _should_respond(msg: Message) -> bool:
-    if msg.chat.type == "private":
-        return True
-    text = msg.text or ""
-    if f"@{_BOT_USERNAME}".lower() in text.lower():
+def _mentioned(msg: Message) -> bool:
+    if f"@{_BOT_USERNAME}".lower() in (msg.text or "").lower():
         return True
     reply = msg.reply_to_message
     return bool(reply and reply.from_user and reply.from_user.is_bot)
+
+
+async def _is_for_bot(text: str) -> bool:
+    try:
+        ans = await asyncio.to_thread(
+            client.complete,
+            system="Tentukan: pesan ini ditujukan ke asisten bot admin (perintah, pertanyaan, "
+            "minta data/aksi/saran soal sistem)? Atau cuma obrolan iseng antar orang? "
+            "Jawab HANYA satu kata: YA atau TIDAK.",
+            user=text,
+            tier="cheap",
+            temperature=0,
+        )
+        return ans.strip().upper().startswith("YA")
+    except Exception as e:
+        log.warning("bot.gate_failed", error=str(e))
+        return False
+
+
+async def _send_reply(msg: Message, text: str) -> None:
+    clean = sanitize_script(text)[:4000]
+    try:
+        await msg.reply(clean, parse_mode="HTML")
+    except Exception as e:
+        log.warning("bot.html_reply_failed", error=str(e))
+        await msg.reply(clean)
 
 
 async def _plain_chat(text: str) -> str:
@@ -168,20 +192,28 @@ async def _plain_chat(text: str) -> str:
 
 @dp.message(F.text)
 async def on_message(msg: Message) -> None:
-    if not _should_respond(msg):
-        return
-    text = (msg.text or "").replace(f"@{_BOT_USERNAME}", "").strip()
-    if not text:
-        return
+    text_raw = msg.text or ""
     owner_id = get_settings().owner_telegram_id
     is_owner = bool(msg.from_user and owner_id and msg.from_user.id == owner_id)
+    is_private = msg.chat.type == "private"
+
+    if not (is_private or _mentioned(msg)):
+        if is_owner:
+            if not await _is_for_bot(text_raw):
+                return
+        else:
+            return
+
+    text = text_raw.replace(f"@{_BOT_USERNAME}", "").strip()
+    if not text:
+        return
     try:
         async with ChatActionSender.typing(bot=msg.bot, chat_id=msg.chat.id):
             reply = await run_admin_agent(text) if is_owner else await _plain_chat(text)
     except Exception as e:
         log.error("bot.message_failed", error=str(e))
-        reply = "Waduh error pas ngeproses, coba lagi ya."
-    await msg.reply(reply[:4000])
+        reply = "Waduh error pas ngeproses, coba lagi ya. 😵"
+    await _send_reply(msg, reply)
 
 
 async def main() -> None:

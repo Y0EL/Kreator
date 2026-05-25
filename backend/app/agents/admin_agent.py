@@ -19,7 +19,13 @@ ADMIN_SYSTEM = (
     "Lo bisa pakai tools buat lihat, nambah, ngubah, ngapus sumber dan channel YouTube, lihat "
     "kandidat, statistik, dan ngelola knowledge base. Jawab ringkas. Kalau cuma diajak ngobrol "
     "biasa, balas singkat TANPA manggil tool. Jangan ngarang data, selalu pakai tool buat data "
-    "nyata. Konfirmasi singkat abis ngelakuin aksi."
+    "nyata. Konfirmasi singkat abis ngelakuin aksi. "
+    "FORMAT jawaban buat Telegram pakai HTML: <b>tebal</b>, <i>miring</i>, <u>garis bawah</u>, "
+    "<s>coret</s>, <code>monospace</code>, dan <pre>blok monospace buat daftar/tabel/kotak ala "
+    "terminal</pre>. Pakai EMOJI yang relevan biar idup (mis. 📡 sumber, 🟢 active, ⏸️ paused, "
+    "🔥 kandidat, 🎬 youtube, 🗑️ hapus). Buat nampilin data/daftar, bungkus dalam <pre> biar rapi. "
+    "DILARANG KERAS pakai tanda em dash, en dash, atau titik koma. Pakai tanda hubung biasa atau "
+    "koma. Jangan nawarin aksi yang ga diminta."
 )
 
 TOOLS = [
