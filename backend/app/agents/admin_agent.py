@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 
+import httpx
 from sqlalchemy import func, select
 
+from app.config import get_settings
 from app.db.enums import SourceStatus, SourceType, StoryStatus
-from app.db.models import CandidateQueue, Knowledge, Source, Story, StoryScore
+from app.db.models import CandidateQueue, Knowledge, RawItem, Source, Story, StoryScore
 from app.db.session import SessionLocal
 from app.llm import client
 from app.logging import get_logger
@@ -33,6 +35,14 @@ TOOLS = [
         "name": "list_sources",
         "description": "Lihat semua sumber crawl beserta status dan tipe.",
         "parameters": {"type": "object", "properties": {}},
+    }},
+    {"type": "function", "function": {
+        "name": "ingest_youtube",
+        "description": "Ambil SATU video YouTube spesifik (URL atau judul buat dicari), transkrip, "
+                       "lalu langsung bikin draft skrip versi sendiri dan kirim ke grup.",
+        "parameters": {"type": "object", "properties": {
+            "video": {"type": "string", "description": "URL video YouTube atau judul"}},
+            "required": ["video"]},
     }},
     {"type": "function", "function": {
         "name": "add_youtube_channel",
@@ -95,7 +105,88 @@ async def _find_source(session, identifier: str) -> Source | None:
     return await session.scalar(select(Source).where(Source.name.ilike(f"%{ident}%")))
 
 
+async def _ingest_youtube(video: str) -> str:
+    from datetime import datetime, timezone
+
+    from app.agents.delivery import generate_and_deliver
+    from app.crawler.adapters.youtube import _fetch_caption, _fetch_whisper, extract_video_id
+    from app.integrations import r2
+    from app.pipeline.processor import process_raw_item
+    from app.util.hashing import content_hash
+
+    s = get_settings()
+    if not s.youtube_api_key:
+        return "YOUTUBE_API_KEY belum di-set."
+
+    vid = extract_video_id(video)
+    title: str | None = None
+    async with httpx.AsyncClient(timeout=25) as c:
+        if not vid:
+            r = await c.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params={"part": "snippet", "q": video, "type": "video",
+                        "maxResults": 1, "key": s.youtube_api_key},
+            )
+            items = r.json().get("items", [])
+            if not items:
+                return f"Video ga ketemu buat: {video}"
+            vid = items[0]["id"]["videoId"]
+            title = items[0]["snippet"]["title"]
+        else:
+            r = await c.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"part": "snippet", "id": vid, "key": s.youtube_api_key},
+            )
+            items = r.json().get("items", [])
+            title = items[0]["snippet"]["title"] if items else f"YouTube {vid}"
+
+    proxy = s.crawl_proxy_url or None
+    try:
+        text = await asyncio.to_thread(_fetch_caption, vid, proxy)
+    except Exception:
+        try:
+            text = await asyncio.to_thread(_fetch_whisper, vid)
+        except Exception as e:
+            return f"Gagal ambil transkrip video {vid}: {e}"
+    if not text or len(text) < 500:
+        return "Transkrip kosong atau kependek, ga bisa diproses."
+
+    url = f"https://www.youtube.com/watch?v={vid}"
+    async with SessionLocal() as session:
+        src = await session.scalar(select(Source).where(Source.name == "Manual YouTube"))
+        if src is None:
+            src = Source(
+                name="Manual YouTube", type=SourceType.submission, base_url="youtube://manual"
+            )
+            session.add(src)
+            await session.flush()
+        h = content_hash(text)
+        existing = await session.scalar(select(RawItem).where(RawItem.raw_hash == h))
+        if existing is None:
+            key = r2.raw_key(src.id, h)
+            r2.put_text(key, text)
+            item = RawItem(
+                source_id=src.id, source_url=url, title=title,
+                crawled_at=datetime.now(timezone.utc), r2_key_raw=key, raw_hash=h,
+                raw_excerpt=text[:2000],
+            )
+            session.add(item)
+            await session.flush()
+            story = await process_raw_item(session, item)
+            story_id = story.id if story else None
+        else:
+            story = await session.scalar(select(Story).where(Story.raw_item_id == existing.id))
+            story_id = story.id if story else None
+        await session.commit()
+
+    if not story_id:
+        return "Gagal proses jadi cerita."
+    return await generate_and_deliver(story_id)
+
+
 async def _exec(name: str, args: dict) -> str:
+    if name == "ingest_youtube":
+        return await _ingest_youtube(args.get("video", ""))
     async with SessionLocal() as session:
         if name == "list_sources":
             rows = (await session.scalars(select(Source))).all()

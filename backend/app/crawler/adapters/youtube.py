@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import tempfile
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -13,6 +14,17 @@ from app.llm import client
 from app.logging import get_logger
 
 log = get_logger(__name__)
+
+
+_VIDEO_ID = re.compile(r"(?:v=|youtu\.be/|/shorts/|/embed/|/live/)([A-Za-z0-9_-]{11})")
+
+
+def extract_video_id(value: str) -> str | None:
+    m = _VIDEO_ID.search(value or "")
+    if m:
+        return m.group(1)
+    stripped = (value or "").strip()
+    return stripped if re.fullmatch(r"[A-Za-z0-9_-]{11}", stripped) else None
 
 
 def _window(years_ago: int) -> tuple[str, str]:
