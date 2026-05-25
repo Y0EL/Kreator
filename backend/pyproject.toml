@@ -21,6 +21,9 @@ dependencies = [
     "alembic>=1.13",
     # queue (Postgres-backed, no Redis)
     "procrastinate>=2.9",
+    # in-app scheduler (window collection + digest)
+    "apscheduler>=3.10",
+    "tzdata>=2024.1",
     # llm
     "litellm>=1.52",
     # telegram

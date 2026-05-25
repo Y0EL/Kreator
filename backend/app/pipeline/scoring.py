@@ -84,10 +84,10 @@ def compute_score(story: Story, novelty: float, audience_match: float = 0.5) -> 
 def _priority(final: float, story: Story) -> Priority:
     if not story.is_primary:
         return Priority.reject
-    if final >= 0.7:
+    if final >= 0.75:
         return Priority.A
-    if final >= 0.55:
+    if final >= 0.62:
         return Priority.B
-    if final >= 0.4:
+    if final >= 0.5:
         return Priority.C
     return Priority.reject

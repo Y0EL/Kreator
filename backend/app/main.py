@@ -13,6 +13,7 @@ from app.logging import configure_logging, get_logger
 from app.notifier.bot import dp
 from app.notifier.telegram import send_digest
 from app.pipeline.processor import process_new
+from app.scheduler import build_scheduler
 
 log = get_logger(__name__)
 settings = get_settings()
@@ -29,7 +30,11 @@ async def lifespan(_: FastAPI):
             drop_pending_updates=True,
         )
         log.info("webhook.set", url=settings.telegram_webhook_url)
+    scheduler = build_scheduler()
+    scheduler.start()
+    log.info("scheduler.started", jobs=[j.id for j in scheduler.get_jobs()])
     yield
+    scheduler.shutdown(wait=False)
     await bot.session.close()
 
 

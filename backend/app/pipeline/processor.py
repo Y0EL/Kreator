@@ -56,7 +56,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
     score = scoring.compute_score(story, novelty=novelty)
     session.add(score)
 
-    if story.is_primary and score.priority != Priority.reject:
+    if story.is_primary and score.priority in (Priority.A, Priority.B):
         story.status = StoryStatus.queued
         session.add(
             CandidateQueue(story_id=story.id, status=StoryStatus.queued, priority=score.priority)
