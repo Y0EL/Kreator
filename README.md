@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <a href="https://app.netlify.com/projects/yoel-konten/deploys"><img src="https://api.netlify.com/api/v1/badges/cf406154-5034-4383-89e0-75b0ba7ee1c7/deploy-status" alt="Netlify Status"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/status-ambisius-F0263A?style=for-the-badge" alt="status">
   <img src="https://img.shields.io/badge/Python-3.11-0B0B0D?style=for-the-badge&logo=python&logoColor=white" alt="python">
   <img src="https://img.shields.io/badge/Next.js-16-0B0B0D?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="nextjs">
