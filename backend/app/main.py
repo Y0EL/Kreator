@@ -5,7 +5,9 @@ from contextlib import asynccontextmanager
 from aiogram import Bot
 from aiogram.types import Update
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.dashboard import router as dashboard_router
 from app.config import get_settings
 from app.crawler.runner import crawl_active_sources
 from app.db.session import SessionLocal
@@ -40,6 +42,14 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(dashboard_router)
 
 
 def _check_internal(token: str | None) -> None:

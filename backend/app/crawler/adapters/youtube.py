@@ -66,7 +66,7 @@ def _fetch_whisper(video_id: str) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         out_tmpl = os.path.join(tmp, "audio.%(ext)s")
         opts = {
-            "format": "bestaudio/best",
+            "format": "worstaudio/bestaudio/best",
             "outtmpl": out_tmpl,
             "quiet": True,
             "noplaylist": True,

@@ -12,6 +12,7 @@ from app.integrations import drive
 from app.llm import client
 from app.llm.prompts import DRAFT_SYSTEM, DRAFT_USER, OUTLINE_SYSTEM, OUTLINE_USER
 from app.logging import get_logger
+from app.services import progress
 from app.util.textfix import sanitize_script
 from app.voice import retrieve
 
@@ -20,15 +21,15 @@ log = get_logger(__name__)
 
 def _evidence_text(pack: ResearchPack | None, story: Story) -> str:
     if pack is None:
-        return f"Ringkasan: {story.summary or story.cleaned_text[:1500]}"
+        return f"Inti cerita: {story.summary or story.cleaned_text[:1500]}"
     return json.dumps(
         {
-            "core_summary": pack.core_summary,
-            "timeline": pack.timeline,
-            "proven": pack.proven,
-            "speculative": pack.speculative,
-            "open_loops": pack.open_loops,
-            "angle": pack.angle,
+            "inti_cerita": pack.core_summary,
+            "urutan_kejadian": pack.timeline,
+            "detail_penting": pack.proven,
+            "bagian_misterius": pack.speculative,
+            "rasa_penasaran": pack.open_loops,
+            "sudut_cerita": pack.angle,
         },
         ensure_ascii=False,
         indent=2,
@@ -146,8 +147,11 @@ async def run_full_generation(
     session: AsyncSession, story: Story, persona: str | None = None
 ) -> Script:
     persona = await _pick_persona(session, persona)
+    progress.step("Riset sumber", 64, story_id=story.id)
     pack = await run_research(session, story)
+    progress.step("Menyusun outline", 76, story_id=story.id)
     outline = await generate_outline(story, pack)
+    progress.step("Menulis draft", 85, story_id=story.id)
     script = await generate_draft(session, story, pack, outline, persona)
     await session.commit()
     return script
@@ -158,7 +162,9 @@ async def rewrite_draft(
 ) -> Script:
     persona = await _pick_persona(session, persona)
     pack = await session.scalar(select(ResearchPack).where(ResearchPack.story_id == story.id))
+    progress.step("Menyusun outline", 76, story_id=story.id)
     outline = await generate_outline(story, pack)
+    progress.step("Menulis ulang draft", 85, story_id=story.id)
     outline["rewrite_note"] = note
     script = await generate_draft(session, story, pack, outline, persona)
     script.rewrite_note = note

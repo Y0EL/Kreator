@@ -16,3 +16,4 @@ secrets/
 _*.txt
 _flytoken.txt
 .DS_Store
+*lock.json

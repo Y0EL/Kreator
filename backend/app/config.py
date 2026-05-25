@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
     tz: str = "Asia/Jakarta"
     internal_api_token: str = ""
+    dashboard_token: str = ""
     cors_allow_origins: str = "http://localhost:3000"
 
     approval_window_start: str = "01:00"

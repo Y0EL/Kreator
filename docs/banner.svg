@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="Crawler Konten">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B0B0D"/>
+      <stop offset="1" stop-color="#141417"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="316" rx="28" fill="url(#bg)" stroke="#26262B" stroke-width="2"/>
+  <rect x="2" y="2" width="6" height="316" rx="3" fill="#F0263A"/>
+
+  <g transform="translate(80, 100)">
+    <rect width="120" height="120" rx="30" fill="#F0263A"/>
+    <text x="60" y="62" text-anchor="middle" dominant-baseline="central" font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-weight="800" letter-spacing="2" font-size="58" fill="#FFFFFF">YL</text>
+  </g>
+
+  <text x="240" y="150" font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-weight="800" letter-spacing="2" font-size="74" fill="#F2F2F4">CRAWLER KONTEN</text>
+  <text x="244" y="200" font-family="'Segoe UI', system-ui, -apple-system, Helvetica, Arial, sans-serif" font-weight="500" letter-spacing="1" font-size="27" fill="#9A9AA2">Mesin editorial horor dan misteri milik Yoel</text>
+
+  <g transform="translate(244, 232)">
+    <rect width="170" height="34" rx="17" fill="#1C1C20" stroke="#2E2E34"/>
+    <text x="85" y="18" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, 'Cascadia Code', Consolas, monospace" font-size="14" fill="#C9C9CF">FastAPI . Next.js</text>
+  </g>
+  <g transform="translate(428, 232)">
+    <rect width="150" height="34" rx="17" fill="#1C1C20" stroke="#2E2E34"/>
+    <text x="75" y="18" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, 'Cascadia Code', Consolas, monospace" font-size="14" fill="#C9C9CF">Fly . Neon . R2</text>
+  </g>
+  <g transform="translate(592, 232)">
+    <rect width="190" height="34" rx="17" fill="#2A0E12" stroke="#5A1B22"/>
+    <text x="95" y="18" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, 'Cascadia Code', Consolas, monospace" font-size="14" fill="#F0808C">Telegram . OpenAI</text>
+  </g>
+</svg>

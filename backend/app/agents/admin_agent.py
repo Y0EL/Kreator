@@ -3,32 +3,33 @@ from __future__ import annotations
 import asyncio
 import json
 
-import httpx
 from sqlalchemy import func, select
 
 from app.agents.memory import append_turn, load_history, maybe_compact
-from app.config import get_settings
 from app.db.enums import SourceStatus, SourceType, StoryStatus
-from app.db.models import CandidateQueue, Knowledge, RawItem, Source, Story, StoryScore
+from app.db.models import CandidateQueue, Knowledge, Source, Story, StoryScore
 from app.db.session import SessionLocal
+from app.services.sources import purge_source
 from app.llm import client
 from app.logging import get_logger
 
 log = get_logger(__name__)
 
 ADMIN_SYSTEM = (
-    "Lo asisten admin buat sistem crawler konten horor/misteri punya Yoel. Ngobrol SANTAI dan "
-    "akrab pakai bahasa sehari-hari (boleh 'gue/lo'), JANGAN formal, JANGAN pakai 'saya/anda'. "
-    "Lo bisa pakai tools buat lihat, nambah, ngubah, ngapus sumber dan channel YouTube, lihat "
-    "kandidat, statistik, dan ngelola knowledge base. Jawab ringkas. Kalau cuma diajak ngobrol "
-    "biasa, balas singkat TANPA manggil tool. Jangan ngarang data, selalu pakai tool buat data "
-    "nyata. Konfirmasi singkat abis ngelakuin aksi. "
-    "FORMAT jawaban buat Telegram pakai HTML: <b>tebal</b>, <i>miring</i>, <u>garis bawah</u>, "
-    "<s>coret</s>, <code>monospace</code>, dan <pre>blok monospace buat daftar/tabel/kotak ala "
-    "terminal</pre>. Pakai EMOJI yang relevan biar idup (mis. 📡 sumber, 🟢 active, ⏸️ paused, "
-    "🔥 kandidat, 🎬 youtube, 🗑️ hapus). Buat nampilin data/daftar, bungkus dalam <pre> biar rapi. "
-    "DILARANG KERAS pakai tanda em dash, en dash, atau titik koma. Pakai tanda hubung biasa atau "
-    "koma. Jangan nawarin aksi yang ga diminta."
+    "Lo asisten admin sistem crawler konten horor punya Yoel, dengan AKSES ADMIN PENUH. "
+    "PRINSIP UTAMA: EKSEKUSI LANGSUNG pakai tools, JANGAN banyak nanya, JANGAN minta konfirmasi "
+    "berlebihan. Lo PUNYA kuasa buat ngelakuin semua aksi, jadi lakuin, jangan ragu.\n"
+    "- Dikasih URL atau judul YouTube: LANGSUNG panggil ingest_youtube. Kalau user nyebut durasi "
+    "(mis. '30-40 menit'), isi target_minutes (ambil angka tengah, mis. 35). JANGAN nanya tone, "
+    "POV, verbatim, SFX, atau apa pun, sistem udah punya gaya naratif sendiri.\n"
+    "- Diminta hapus sumber: LANGSUNG panggil delete_source (ini HAPUS PERMANEN beserta semua "
+    "history). Jangan cuma arsip, jangan nanya ulang. Banyak sumber: panggil delete_source "
+    "berulang. Pakai ID angka dari list_sources.\n"
+    "- Kalau ga yakin sumber mana, panggil list_sources sendiri, jangan nanya user.\n"
+    "Ngobrol santai (gue/lo), JANGAN formal, JANGAN 'saya/anda'. Jawab RINGKAS, konfirmasi HASIL "
+    "bukan nanya. Jangan ngarang, pakai tool buat data nyata.\n"
+    "FORMAT Telegram HTML: <b>tebal</b>, <i>miring</i>, <code>mono</code>, <pre>blok buat daftar</pre>. "
+    "Emoji secukupnya. DILARANG KERAS em dash, en dash, titik koma. Pakai hubung biasa atau koma."
 )
 
 TOOLS = [
@@ -39,10 +40,11 @@ TOOLS = [
     }},
     {"type": "function", "function": {
         "name": "ingest_youtube",
-        "description": "Ambil SATU video YouTube spesifik (URL atau judul buat dicari), transkrip, "
-                       "lalu langsung bikin draft skrip versi sendiri dan kirim ke grup.",
+        "description": "Ambil SATU video YouTube (URL atau judul), transkrip, lalu langsung bikin "
+                       "draft skrip versi sendiri dan kirim ke grup. Panggil langsung tanpa nanya.",
         "parameters": {"type": "object", "properties": {
-            "video": {"type": "string", "description": "URL video YouTube atau judul"}},
+            "video": {"type": "string", "description": "URL video YouTube atau judul"},
+            "target_minutes": {"type": "integer", "description": "durasi target skrip (menit), opsional"}},
             "required": ["video"]},
     }},
     {"type": "function", "function": {
@@ -68,7 +70,8 @@ TOOLS = [
     }},
     {"type": "function", "function": {
         "name": "delete_source",
-        "description": "Hapus sumber permanen by id atau nama.",
+        "description": "HAPUS PERMANEN sumber beserta semua history-nya (raw item, story, script). "
+                       "by id angka atau nama. Eksekusi langsung kalau diminta hapus.",
         "parameters": {"type": "object", "properties": {
             "identifier": {"type": "string"}}, "required": ["identifier"]},
     }},
@@ -100,96 +103,18 @@ TOOLS = [
 
 
 async def _find_source(session, identifier: str) -> Source | None:
-    ident = str(identifier).strip()
+    ident = str(identifier).strip().lstrip("#").strip()
     if ident.isdigit():
         return await session.get(Source, int(ident))
     return await session.scalar(select(Source).where(Source.name.ilike(f"%{ident}%")))
 
 
-async def _ingest_youtube(video: str) -> str:
-    from datetime import datetime, timezone
-
-    from app.agents.delivery import generate_and_deliver
-    from app.crawler.adapters.youtube import _fetch_caption, _fetch_whisper, extract_video_id
-    from app.integrations import r2
-    from app.pipeline.processor import process_raw_item
-    from app.util.hashing import content_hash
-
-    s = get_settings()
-    if not s.youtube_api_key:
-        return "YOUTUBE_API_KEY belum di-set."
-
-    vid = extract_video_id(video)
-    title: str | None = None
-    async with httpx.AsyncClient(timeout=25) as c:
-        if not vid:
-            r = await c.get(
-                "https://www.googleapis.com/youtube/v3/search",
-                params={"part": "snippet", "q": video, "type": "video",
-                        "maxResults": 1, "key": s.youtube_api_key},
-            )
-            items = r.json().get("items", [])
-            if not items:
-                return f"Video ga ketemu buat: {video}"
-            vid = items[0]["id"]["videoId"]
-            title = items[0]["snippet"]["title"]
-        else:
-            r = await c.get(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={"part": "snippet", "id": vid, "key": s.youtube_api_key},
-            )
-            items = r.json().get("items", [])
-            title = items[0]["snippet"]["title"] if items else f"YouTube {vid}"
-
-    proxy = s.crawl_proxy_url or None
-    try:
-        text = await asyncio.to_thread(_fetch_caption, vid, proxy)
-    except Exception:
-        try:
-            text = await asyncio.to_thread(_fetch_whisper, vid)
-        except Exception as e:
-            return f"Gagal ambil transkrip video {vid}: {e}"
-    if not text or len(text) < 500:
-        return "Transkrip kosong atau kependek, ga bisa diproses."
-
-    url = f"https://www.youtube.com/watch?v={vid}"
-    async with SessionLocal() as session:
-        src = await session.scalar(select(Source).where(Source.name == "Manual YouTube"))
-        if src is None:
-            src = Source(
-                name="Manual YouTube", type=SourceType.submission, base_url="youtube://manual"
-            )
-            session.add(src)
-            await session.flush()
-        h = content_hash(text)
-        existing = await session.scalar(select(RawItem).where(RawItem.raw_hash == h))
-        if existing is None:
-            key = r2.raw_key(src.id, h)
-            r2.put_text(key, text)
-            item = RawItem(
-                source_id=src.id, source_url=url, title=title,
-                crawled_at=datetime.now(timezone.utc), r2_key_raw=key, raw_hash=h,
-                raw_excerpt=text[:2000],
-            )
-            session.add(item)
-            await session.flush()
-            story = await process_raw_item(session, item)
-            story_id = story.id if story else None
-        else:
-            story = await session.scalar(select(Story).where(Story.raw_item_id == existing.id))
-            story_id = story.id if story else None
-        await session.commit()
-
-    if not story_id:
-        return "Gagal proses jadi cerita."
-    return await generate_and_deliver(story_id)
-
-
-async def _safe_ingest(video: str) -> None:
+async def _safe_ingest(video: str, target_minutes: int | None = None) -> None:
     from app.notifier.telegram import send_text
+    from app.services.youtube_ingest import ingest_youtube
 
     try:
-        await _ingest_youtube(video)
+        await ingest_youtube(video, target_minutes)
     except Exception as e:
         log.error("ingest.failed", video=video, error=str(e))
         await send_text(f"Gagal proses video: {e}")
@@ -197,10 +122,10 @@ async def _safe_ingest(video: str) -> None:
 
 async def _exec(name: str, args: dict) -> str:
     if name == "ingest_youtube":
-        asyncio.create_task(_safe_ingest(args.get("video", "")))
+        asyncio.create_task(_safe_ingest(args.get("video", ""), args.get("target_minutes")))
         return (
             "Oke, video lagi gue garap di background (transkrip, riset, bikin draft). "
-            "Draftnya nanti otomatis masuk grup ya."
+            "Draftnya nanti otomatis masuk grup ya. 🎬"
         )
     async with SessionLocal() as session:
         if name == "list_sources":
@@ -264,11 +189,9 @@ async def _exec(name: str, args: dict) -> str:
         if name == "delete_source":
             src = await _find_source(session, args["identifier"])
             if src is None:
-                return "Sumber tidak ketemu."
-            nm = src.name
-            await session.delete(src)
-            await session.commit()
-            return f"Sumber '{nm}' dihapus."
+                return "Sumber ga ketemu."
+            purged = await purge_source(session, src.id)
+            return f"Sumber '{purged}' dihapus permanen beserta semua history-nya. 🗑️"
 
         if name == "list_candidates":
             limit = int(args.get("limit", 10))
