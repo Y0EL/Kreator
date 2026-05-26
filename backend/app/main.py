@@ -18,6 +18,7 @@ from app.notifier.telegram import send_digest
 from app.pipeline.processor import process_new
 from app.scheduler import build_scheduler
 from app.seeds import ensure_default_sources
+from app.services.youtube_channels import canonical_youtube_source
 
 log = get_logger(__name__)
 settings = get_settings()
@@ -30,6 +31,7 @@ async def lifespan(_: FastAPI):
     await init_db()
     async with SessionLocal() as session:
         await ensure_default_sources(session)
+        await canonical_youtube_source(session, create=False)
     if settings.telegram_webhook_url:
         await bot.set_webhook(
             settings.telegram_webhook_url,

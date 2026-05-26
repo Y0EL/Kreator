@@ -13,6 +13,7 @@ from app.logging import get_logger
 from app.notifier.telegram import send_digest, send_text
 from app.pipeline.processor import process_new
 from app.services import progress
+from app.services.youtube_channels import snapshot_channel_stats
 
 log = get_logger(__name__)
 
@@ -50,6 +51,12 @@ async def run_collection() -> None:
     log.info("schedule.collection", jobs=len(jobs), candidates=candidates, sent=sent)
 
 
+async def run_stats_snapshot() -> None:
+    async with SessionLocal() as session:
+        rows = await snapshot_channel_stats(session)
+    log.info("schedule.stats_snapshot", rows=rows)
+
+
 def status() -> dict:
     s = _scheduler
     tz = get_settings().tz
@@ -77,6 +84,13 @@ def build_scheduler() -> AsyncIOScheduler:
         run_collection,
         CronTrigger(hour="*/3", minute=0, timezone=tz),
         id="collection",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        run_stats_snapshot,
+        CronTrigger(hour=6, minute=0, timezone=tz),
+        id="stats_snapshot",
         max_instances=1,
         coalesce=True,
     )

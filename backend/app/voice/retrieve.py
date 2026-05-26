@@ -33,3 +33,14 @@ async def retrieve_exemplars(
         stmt = stmt.where(VoiceExemplar.embedding.is_not(None)).order_by(dist)
     stmt = stmt.limit(k)
     return list((await session.scalars(stmt)).all())
+
+
+async def retrieve_exemplars_blend(
+    session: AsyncSession, query_embedding: list[float] | None, k: int = 6
+) -> list[str]:
+    stmt = select(VoiceExemplar.chunk_text)
+    if query_embedding is not None:
+        dist = VoiceExemplar.embedding.cosine_distance(query_embedding)
+        stmt = stmt.where(VoiceExemplar.embedding.is_not(None)).order_by(dist)
+    stmt = stmt.limit(k)
+    return list((await session.scalars(stmt)).all())

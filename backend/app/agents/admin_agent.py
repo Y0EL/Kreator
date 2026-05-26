@@ -26,6 +26,10 @@ ADMIN_SYSTEM = (
     "history). Jangan cuma arsip, jangan nanya ulang. Banyak sumber: panggil delete_source "
     "berulang. Pakai ID angka dari list_sources.\n"
     "- Kalau ga yakin sumber mana, panggil list_sources sendiri, jangan nanya user.\n"
+    "- Diminta nyari atau nambah youtuber storytelling sejenis: panggil discover_youtube_channels "
+    "dengan query yang pas, dia bakal nyari di YouTube dan nambah yang relevan sendiri. Kalau user "
+    "minta 'semua' atau 'sebanyaknya', panggil beberapa kali dengan query beda (mis. 'cerita horor "
+    "indonesia', 'misteri kriminal indonesia', 'creepypasta narasi indonesia').\n"
     "GAYA JAWABAN, WAJIB DIPATUHI: ngobrol santai gue/lo, dan SANGAT RINGKAS, maksimal 1 sampai 2 "
     "kalimat pendek. Cuma konfirmasi HASIL secara polos. DILARANG KERAS pakai emoji apa pun. "
     "DILARANG bikin daftar bullet, DILARANG bikin section model 'Catatan', 'Status', 'Nantinya'. "
@@ -55,6 +59,15 @@ TOOLS = [
         "description": "Tambah channel YouTube untuk dipantau (handle @nama, URL, atau channelId UC...).",
         "parameters": {"type": "object", "properties": {
             "channel": {"type": "string"}}, "required": ["channel"]},
+    }},
+    {"type": "function", "function": {
+        "name": "discover_youtube_channels",
+        "description": "Cari channel YouTube storytelling horor/misteri yang relevan lewat YouTube, "
+                       "lalu LANGSUNG tambahin yang ketemu ke daftar pantauan. Pakai kalau user minta "
+                       "nyariin atau nambah youtuber sejenis secara dinamis.",
+        "parameters": {"type": "object", "properties": {
+            "query": {"type": "string", "description": "kata kunci, mis. 'cerita horor misteri storytelling indonesia'"},
+            "max": {"type": "integer", "description": "jumlah channel maksimal yang ditambah, default 5"}}},
     }},
     {"type": "function", "function": {
         "name": "add_rss_source",
@@ -164,6 +177,50 @@ async def _exec(name: str, args: dict) -> str:
             src.parser_config = cfg
             await session.commit()
             return f"Channel {channel} ditambahkan. Total {len(chans)} channel."
+
+        if name == "discover_youtube_channels":
+            from app.config import get_settings
+
+            key = get_settings().youtube_api_key
+            if not key:
+                return "YOUTUBE_API_KEY belum di-set, ga bisa nyari channel."
+            query = (args.get("query") or "cerita horor misteri storytelling indonesia").strip()
+            maxn = max(1, min(int(args.get("max", 5)), 10))
+            import httpx
+
+            async with httpx.AsyncClient(timeout=20) as hc:
+                r = await hc.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params={"part": "snippet", "type": "channel", "q": query,
+                            "maxResults": maxn, "key": key},
+                )
+                found = r.json().get("items", [])
+            src = await session.scalar(
+                select(Source).where(Source.type == SourceType.youtube).limit(1)
+            )
+            if src is None:
+                src = Source(
+                    name="YouTube Watcher", type=SourceType.youtube,
+                    base_url="youtube://watcher",
+                    parser_config={"channels": [], "max_per_channel": 10},
+                )
+                session.add(src)
+                await session.flush()
+            cfg = dict(src.parser_config or {})
+            chans = list(cfg.get("channels") or [])
+            added = []
+            for it in found:
+                cid = it.get("id", {}).get("channelId")
+                title = it.get("snippet", {}).get("title")
+                if cid and cid not in chans:
+                    chans.append(cid)
+                    added.append(title or cid)
+            cfg["channels"] = chans
+            src.parser_config = cfg
+            await session.commit()
+            if not added:
+                return f"Ga nemu channel baru buat '{query}'."
+            return f"Nambah {len(added)} channel: {', '.join(added)}. Total {len(chans)} dipantau."
 
         if name == "add_rss_source":
             session.add(

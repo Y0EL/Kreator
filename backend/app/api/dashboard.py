@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -15,6 +15,7 @@ from app.crawler.runner import crawl_active_sources
 from app.db.enums import Decision, SourceStatus, SourceType, StoryStatus
 from app.db.models import (
     CandidateQueue,
+    ChannelStat,
     RawItem,
     ResearchPack,
     Script,
@@ -28,8 +29,16 @@ from app.logging import get_logger
 from app.notifier.telegram import send_digest, send_text
 from app.pipeline.processor import process_new, rescore_existing
 from app.scheduler import status as scheduler_status
-from app.services import progress
+from app.services import cache, progress
 from app.services.sources import purge_source
+from app.services.youtube_channels import (
+    add_channel,
+    canonical_youtube_source,
+    monitored_channels,
+    remove_channel,
+    resolve_channel_id,
+    snapshot_channel_stats,
+)
 from app.services.youtube_ingest import ingest_youtube
 
 log = get_logger(__name__)
@@ -76,6 +85,7 @@ async def _bg_action(name: str) -> None:
         "process": "Memproses item",
         "digest": "Kirim digest",
         "rescore": "Skor ulang bahan",
+        "stats": "Snapshot statistik channel",
     }
     progress.start(name, labels.get(name, name))
     progress.step(labels.get(name, name), 20)
@@ -110,6 +120,10 @@ async def _bg_action(name: str) -> None:
                 queued = await rescore_existing(session)
                 progress.done(f"{queued} kandidat baru dari bahan lama")
                 await send_text(f"Skor ulang kelar. {queued} kandidat baru muncul.")
+            elif name == "stats":
+                rows = await snapshot_channel_stats(session)
+                cache.invalidate("yt:")
+                progress.done(f"{rows} channel di-snapshot")
     except Exception as e:
         progress.fail(str(e))
         log.error("api.action_failed", name=name, error=str(e))
@@ -472,7 +486,7 @@ async def system() -> dict:
 
 @router.post("/actions/{name}")
 async def action(name: str) -> dict:
-    if name not in ("cycle", "crawl", "process", "digest", "rescore"):
+    if name not in ("cycle", "crawl", "process", "digest", "rescore", "stats"):
         raise HTTPException(status_code=400, detail="aksi ga dikenal")
     asyncio.create_task(_bg_action(name))
     return {"ok": True, "started": name}
@@ -493,6 +507,7 @@ async def _channel_stats(client: httpx.AsyncClient, channel: str, key: str) -> d
     sn = it.get("snippet", {})
     return {
         "channel": channel,
+        "channel_id": it.get("id"),
         "title": sn.get("title"),
         "thumbnail": sn.get("thumbnails", {}).get("default", {}).get("url"),
         "subscribers": int(st.get("subscriberCount", 0)),
@@ -526,4 +541,170 @@ async def youtube_stats(session: AsyncSession = Depends(get_session)) -> list[di
                 data = None
             if data:
                 out.append(data)
+    return out
+
+
+@router.get("/youtube/channels")
+async def youtube_channels_list(session: AsyncSession = Depends(get_session)) -> list[dict]:
+    key = get_settings().youtube_api_key
+    src = await canonical_youtube_source(session, create=False)
+    chans = monitored_channels(src)
+    if not key or not chans:
+        return []
+    ckey = "yt:channels:" + ",".join(chans)
+    cached = cache.get(ckey)
+    if cached is not None:
+        return cached
+    out: list[dict] = []
+    async with httpx.AsyncClient(timeout=20) as client:
+        for ch in chans:
+            try:
+                data = await _channel_stats(client, ch, key)
+            except Exception as e:
+                log.warning("api.yt_channel_failed", channel=ch, error=str(e))
+                data = None
+            out.append(data or {"channel": ch, "channel_id": None, "title": ch})
+    cache.set(ckey, out, 1800)
+    return out
+
+
+class ChannelBody(BaseModel):
+    channel: str
+
+
+@router.post("/youtube/channels")
+async def youtube_channel_add(
+    body: ChannelBody, session: AsyncSession = Depends(get_session)
+) -> dict:
+    res = await add_channel(session, body.channel)
+    cache.invalidate("yt:channels")
+    return res
+
+
+@router.delete("/youtube/channels")
+async def youtube_channel_remove(
+    channel: str, session: AsyncSession = Depends(get_session)
+) -> dict:
+    res = await remove_channel(session, channel)
+    cache.invalidate("yt:channels")
+    return res
+
+
+@router.get("/youtube/channel/{channel_id}/videos")
+async def youtube_channel_videos(channel_id: str, limit: int = 12) -> list[dict]:
+    key = get_settings().youtube_api_key
+    if not key:
+        return []
+    limit = max(1, min(limit, 24))
+    ckey = f"yt:videos:{channel_id}:{limit}"
+    cached = cache.get(ckey)
+    if cached is not None:
+        return cached
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={"part": "snippet", "channelId": channel_id, "type": "video",
+                    "order": "date", "maxResults": limit, "key": key},
+        )
+        items = r.json().get("items", [])
+        snip = {
+            it["id"]["videoId"]: it.get("snippet", {})
+            for it in items
+            if it.get("id", {}).get("videoId")
+        }
+        vids = list(snip.keys())
+        stats: dict[str, dict] = {}
+        if vids:
+            rs = await client.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"part": "statistics", "id": ",".join(vids), "key": key},
+            )
+            for it in rs.json().get("items", []):
+                stats[it.get("id")] = it.get("statistics", {})
+    out: list[dict] = []
+    for vid in vids:
+        sn = snip[vid]
+        th = sn.get("thumbnails", {})
+        out.append({
+            "video_id": vid,
+            "title": sn.get("title"),
+            "thumbnail": (th.get("medium") or th.get("default") or {}).get("url"),
+            "views": int(stats.get(vid, {}).get("viewCount", 0)),
+            "published_at": sn.get("publishedAt"),
+        })
+    cache.set(ckey, out, 1800)
+    return out
+
+
+class BulkDeleteBody(BaseModel):
+    ids: list[int]
+
+
+@router.post("/sources/bulk_delete")
+async def sources_bulk_delete(
+    body: BulkDeleteBody, session: AsyncSession = Depends(get_session)
+) -> dict:
+    deleted = 0
+    for sid in body.ids:
+        name = await purge_source(session, sid)
+        if name is not None:
+            deleted += 1
+    return {"ok": True, "deleted": deleted}
+
+
+@router.get("/youtube/me")
+async def youtube_me() -> dict:
+    s = get_settings()
+    key = s.youtube_api_key
+    if not key:
+        return {"channel": None, "videos": []}
+    cached = cache.get("yt:me")
+    if cached is not None:
+        return cached
+    async with httpx.AsyncClient(timeout=20) as client:
+        try:
+            snap = await _channel_stats(client, s.owner_yt_handle, key)
+        except Exception as e:
+            log.warning("api.yt_me_failed", error=str(e))
+            snap = None
+    videos: list[dict] = []
+    if snap and snap.get("channel_id"):
+        try:
+            videos = await youtube_channel_videos(snap["channel_id"], limit=12)
+        except Exception as e:
+            log.warning("api.yt_me_videos_failed", error=str(e))
+    result = {"channel": snap, "videos": videos}
+    cache.set("yt:me", result, 1800)
+    return result
+
+
+@router.get("/youtube/me/history")
+async def youtube_me_history(
+    days: int = 90, session: AsyncSession = Depends(get_session)
+) -> list[dict]:
+    s = get_settings()
+    key = s.youtube_api_key
+    if not key:
+        return []
+    ckey = f"yt:mehistory:{days}"
+    cached = cache.get(ckey)
+    if cached is not None:
+        return cached
+    cid = await resolve_channel_id(s.owner_yt_handle, key)
+    if not cid:
+        return []
+    since = datetime.now(timezone.utc).date() - timedelta(days=max(1, min(days, 365)))
+    rows = (
+        await session.scalars(
+            select(ChannelStat)
+            .where(ChannelStat.channel_id == cid, ChannelStat.date >= since)
+            .order_by(ChannelStat.date)
+        )
+    ).all()
+    out = [
+        {"date": r.date.isoformat(), "subscribers": r.subscribers,
+         "views": r.views, "videos": r.videos}
+        for r in rows
+    ]
+    cache.set(ckey, out, 900)
     return out

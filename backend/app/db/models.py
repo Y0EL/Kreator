@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     Float,
     ForeignKey,
     Integer,
@@ -197,6 +198,18 @@ class Script(Base, TimestampMixin):
     rewrite_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     story: Mapped[Story] = relationship(back_populates="scripts")
+
+
+class ChannelStat(Base, TimestampMixin):
+    __tablename__ = "channel_stats"
+    __table_args__ = (UniqueConstraint("channel_id", "date", name="uq_channel_stats_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[str] = mapped_column(String(64), index=True)
+    date: Mapped[date] = mapped_column(Date)
+    subscribers: Mapped[int] = mapped_column(BigInteger, default=0)
+    views: Mapped[int] = mapped_column(BigInteger, default=0)
+    videos: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class VoiceProfile(Base, TimestampMixin):

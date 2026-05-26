@@ -145,8 +145,8 @@ async def generate_draft(
 ) -> Script:
     minutes = story.estimated_minutes or 15
     card = await retrieve.get_voice_card(session, persona)
-    exemplars = await retrieve.retrieve_exemplars(
-        session, persona, query_embedding=story.embedding, k=5
+    exemplars = await retrieve.retrieve_exemplars_blend(
+        session, query_embedding=story.embedding, k=6
     )
 
     total_words = max(700, int(minutes) * _WPM)

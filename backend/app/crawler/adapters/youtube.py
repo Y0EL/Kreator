@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 from app.config import get_settings
 from app.crawler.base import SourceAdapter
@@ -22,20 +23,6 @@ def extract_video_id(value: str) -> str | None:
         return m.group(1)
     stripped = (value or "").strip()
     return stripped if re.fullmatch(r"[A-Za-z0-9_-]{11}", stripped) else None
-
-
-def _window(years_ago: int) -> tuple[str, str]:
-    now = datetime.now(timezone.utc)
-    year = now.year - years_ago
-    month = now.month
-    after = datetime(year, month, 1, tzinfo=timezone.utc)
-    before = (
-        datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-        if month == 12
-        else datetime(year, month + 1, 1, tzinfo=timezone.utc)
-    )
-    fmt = "%Y-%m-%dT%H:%M:%SZ"
-    return after.strftime(fmt), before.strftime(fmt)
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -129,10 +116,15 @@ class YouTubeAdapter(SourceAdapter):
         channels = self.config.get("channels") or []
         if not channels:
             raise ValueError("YouTubeAdapter butuh parser_config.channels")
-        years_ago = int(self.config.get("years_ago", 1))
-        per_channel = int(self.config.get("max_per_channel", 5))
+        per_channel = int(self.config.get("max_per_channel", 10))
         min_chars = int(self.config.get("min_chars", 1500))
-        after, before = _window(years_ago)
+        date_filter = ""
+        recent_months = self.config.get("recent_months")
+        if recent_months:
+            after = (
+                datetime.now(timezone.utc) - timedelta(days=int(recent_months) * 30)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            date_filter = f"&publishedAfter={after}"
 
         for channel in channels:
             channel_id = await self._resolve_channel(channel, api_key)
@@ -141,8 +133,7 @@ class YouTubeAdapter(SourceAdapter):
             url = (
                 "https://www.googleapis.com/youtube/v3/search?part=snippet"
                 f"&channelId={channel_id}&type=video&order=viewCount"
-                f"&maxResults={per_channel}&publishedAfter={after}"
-                f"&publishedBefore={before}&key={api_key}"
+                f"&maxResults={per_channel}{date_filter}&key={api_key}"
             )
             data = await self.rm.get_json(url)
             vid_snips = [
@@ -185,20 +176,32 @@ class YouTubeAdapter(SourceAdapter):
         return out
 
     async def _resolve_channel(self, channel: str, api_key: str) -> str | None:
-        if channel.startswith("UC"):
+        if channel.startswith("UC") and len(channel) >= 20:
             return channel
         handle = channel.lstrip("@").split("/")[-1]
         url = (
             "https://www.googleapis.com/youtube/v3/channels?part=id"
-            f"&forHandle={handle}&key={api_key}"
+            f"&forHandle={quote(handle)}&key={api_key}"
         )
         try:
             data = await self.rm.get_json(url)
             items = data.get("items", [])
-            return items[0]["id"] if items else None
+            if items:
+                return items[0]["id"]
         except Exception as e:
-            log.warning("youtube.resolve_failed", channel=channel, error=str(e))
-            return None
+            log.warning("youtube.resolve_handle_failed", channel=channel, error=str(e))
+        search = (
+            "https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel"
+            f"&maxResults=1&q={quote(channel.lstrip('@'))}&key={api_key}"
+        )
+        try:
+            data = await self.rm.get_json(search)
+            items = data.get("items", [])
+            if items:
+                return items[0]["id"]["channelId"]
+        except Exception as e:
+            log.warning("youtube.resolve_search_failed", channel=channel, error=str(e))
+        return None
 
     async def _transcript(self, video_id: str) -> str | None:
         proxy = get_settings().crawl_proxy_url or None

@@ -137,3 +137,33 @@ export type YtStat = {
   views: number;
   videos: number;
 };
+
+export type YtChannel = {
+  channel: string;
+  channel_id: string | null;
+  title: string | null;
+  thumbnail: string | null;
+  subscribers: number;
+  views: number;
+  videos: number;
+};
+
+export type YtVideo = {
+  video_id: string;
+  title: string | null;
+  thumbnail: string | null;
+  views: number;
+  published_at: string | null;
+};
+
+export type OwnChannel = {
+  channel: YtChannel | null;
+  videos: YtVideo[];
+};
+
+export type StatPoint = {
+  date: string;
+  subscribers: number;
+  views: number;
+  videos: number;
+};

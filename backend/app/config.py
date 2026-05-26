@@ -68,6 +68,7 @@ class Settings(BaseSettings):
 
     sentry_dsn: str = ""
     youtube_api_key: str = ""
+    owner_yt_handle: str = "@yoelmanoppo"
 
     @field_validator("cors_allow_origins")
     @classmethod

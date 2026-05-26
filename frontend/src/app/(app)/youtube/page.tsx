@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { compact, useApi } from "@/lib/use-api";
-import { IconPlus, IconSpinner } from "@/components/icons";
+import { IconChevron, IconPlus, IconSpinner } from "@/components/icons";
 import { WebSearchToggle } from "@/components/web-toggle";
 import { Empty, PageHeader, Skeleton } from "@/components/ui";
 
 export default function YoutubePage() {
-  const stats = useApi(() => api.youtubeStats(), []);
+  const stats = useApi(() => api.youtubeChannels(), []);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [web, setWeb] = useState(false);
@@ -70,24 +71,36 @@ export default function YoutubePage() {
         </div>
       ) : stats.data && stats.data.length > 0 ? (
         <div className="flex flex-col gap-3 px-5 pt-1">
-          {stats.data.map((ch) => (
-            <div key={ch.channel} className="card flex items-center gap-3 p-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {ch.thumbnail ? (
-                <img src={ch.thumbnail} alt="" className="h-10 w-10 rounded-full" />
-              ) : (
-                <div className="h-10 w-10 rounded-full bg-surface" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-fg">{ch.title || ch.channel}</div>
-                <div className="tnum text-xs text-faint">{compact(ch.videos)} video · {compact(ch.views)} views</div>
+          {stats.data.map((ch) => {
+            const inner = (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {ch.thumbnail ? (
+                  <img src={ch.thumbnail} alt="" className="h-10 w-10 rounded-full" />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-surface" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-fg">{ch.title || ch.channel}</div>
+                  <div className="tnum text-xs text-faint">{compact(ch.videos)} video · {compact(ch.views)} views</div>
+                </div>
+                <div className="text-right">
+                  <div className="tnum text-base font-semibold text-fg">{compact(ch.subscribers)}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-faint">subs</div>
+                </div>
+                {ch.channel_id && <IconChevron size={16} className="text-faint" />}
+              </>
+            );
+            return ch.channel_id ? (
+              <Link key={ch.channel} href={`/youtube/${ch.channel_id}`} className="tap card flex items-center gap-3 p-4">
+                {inner}
+              </Link>
+            ) : (
+              <div key={ch.channel} className="card flex items-center gap-3 p-4">
+                {inner}
               </div>
-              <div className="text-right">
-                <div className="tnum text-base font-semibold text-fg">{compact(ch.subscribers)}</div>
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-faint">subs</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Empty>Belum ada channel. Tambah di tab Atur atau bilang ke bot.</Empty>
