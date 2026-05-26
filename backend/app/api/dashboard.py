@@ -558,12 +558,21 @@ async def youtube_channels_list(session: AsyncSession = Depends(get_session)) ->
     out: list[dict] = []
     async with httpx.AsyncClient(timeout=20) as client:
         for ch in chans:
+            data = None
             try:
-                data = await _channel_stats(client, ch, key)
+                cid = ch if (ch.startswith("UC") and len(ch) >= 20) else await resolve_channel_id(ch, key)
+                if cid:
+                    data = await _channel_stats(client, cid, key)
             except Exception as e:
                 log.warning("api.yt_channel_failed", channel=ch, error=str(e))
-                data = None
-            out.append(data or {"channel": ch, "channel_id": None, "title": ch})
+            if data:
+                data["channel"] = ch
+                out.append(data)
+            else:
+                out.append({
+                    "channel": ch, "channel_id": None, "title": ch,
+                    "thumbnail": None, "subscribers": 0, "views": 0, "videos": 0,
+                })
     cache.set(ckey, out, 1800)
     return out
 

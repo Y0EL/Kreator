@@ -20,7 +20,7 @@ function fmtTime(iso: string | null): string {
 
 const JOB_LABEL: Record<string, string> = {
   collection: "Crawl berikutnya",
-  digest: "Digest berikutnya",
+  stats_snapshot: "Catat statistik channel",
 };
 
 export function SystemStatus() {

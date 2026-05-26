@@ -150,33 +150,12 @@ async def _exec(name: str, args: dict) -> str:
             )
 
         if name == "add_youtube_channel":
-            channel = args["channel"].strip()
-            src = await session.scalar(
-                select(Source).where(Source.type == SourceType.youtube).limit(1)
-            )
-            if src is None:
-                src = Source(
-                    name="YouTube Watcher",
-                    type=SourceType.youtube,
-                    base_url="youtube://watcher",
-                    parser_config={
-                        "channels": [channel],
-                        "years_ago": 1,
-                        "max_per_channel": 5,
-                    },
-                )
-                session.add(src)
-                await session.commit()
-                return f"YouTube Watcher dibuat dengan channel {channel}."
-            cfg = dict(src.parser_config or {})
-            chans = list(cfg.get("channels") or [])
-            if channel in chans:
-                return f"Channel {channel} sudah ada. Total {len(chans)} channel."
-            chans.append(channel)
-            cfg["channels"] = chans
-            src.parser_config = cfg
-            await session.commit()
-            return f"Channel {channel} ditambahkan. Total {len(chans)} channel."
+            from app.services.youtube_channels import add_channel as _add_ch
+
+            res = await _add_ch(session, args["channel"].strip())
+            if not res["added"]:
+                return f"Channel '{args['channel']}' udah ada. Total {res['total']} channel."
+            return f"Channel '{args['channel']}' ke-resolve dan ditambahin. Total {res['total']} dipantau."
 
         if name == "discover_youtube_channels":
             from app.config import get_settings
@@ -328,11 +307,12 @@ async def run_admin_agent(chat_id: int, user_text: str) -> str:
     messages: list = [{"role": "system", "content": ADMIN_SYSTEM}, *history,
                       {"role": "user", "content": user_text}]
     reply = "Kebanyakan langkah, gue stop dulu."
+    last_result = ""
     for _ in range(5):
         resp = await asyncio.to_thread(client.chat_raw, messages, TOOLS)
         msg = resp.choices[0].message  # type: ignore[union-attr]
         if not getattr(msg, "tool_calls", None):
-            reply = msg.content or "(kosong)"
+            reply = (msg.content or "").strip() or last_result or "Beres, udah gue jalanin."
             break
         messages.append(_serialize_assistant(msg))
         for tc in msg.tool_calls:
@@ -341,6 +321,7 @@ async def run_admin_agent(chat_id: int, user_text: str) -> str:
             except json.JSONDecodeError:
                 args = {}
             result = await _exec(tc.function.name, args)
+            last_result = result
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
     await append_turn(chat_id, "user", user_text)

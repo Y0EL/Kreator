@@ -27,7 +27,8 @@ export function useApi<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   return { data, loading, error, refetch: run };
 }
 
-export function compact(n: number): string {
+export function compact(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "0";
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;

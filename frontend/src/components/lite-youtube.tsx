@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-const PIPED = (process.env.NEXT_PUBLIC_PIPED_INSTANCE || "https://piped.video").replace(/\/$/, "");
-
 export function LiteYouTube({
   id,
   title,
@@ -15,31 +13,18 @@ export function LiteYouTube({
 }) {
   const [play, setPlay] = useState(false);
   const thumb = thumbnail || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
-  const src = PIPED
-    ? `${PIPED}/embed/${id}?autoplay=1`
-    : `https://www.youtube-nocookie.com/embed/${id}?autoplay=1`;
 
   if (play) {
     return (
-      <div>
-        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
-          <iframe
-            className="absolute inset-0 h-full w-full"
-            src={src}
-            title={title || "video"}
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-        <a
-          href={`https://www.youtube.com/watch?v=${id}`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-block text-[11px] text-faint underline"
-        >
-          Ga jalan? buka di YouTube
-        </a>
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1`}
+          title={title || "video"}
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
       </div>
     );
   }

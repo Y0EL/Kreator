@@ -9,8 +9,11 @@ const KIND_LABEL: Record<string, string> = {
   youtube: "Kemas ulang YouTube",
   draft: "Bikin draft skrip",
   crawl: "Crawl sumber",
+  cycle: "Crawl penuh",
   process: "Proses item",
   digest: "Kirim digest",
+  rescore: "Skor ulang",
+  stats: "Catat statistik channel",
 };
 
 export function ActiveJobs() {
