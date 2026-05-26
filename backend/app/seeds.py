@@ -9,7 +9,31 @@ from app.logging import get_logger
 
 log = get_logger(__name__)
 
+WIKIPEDIA_SOURCE: dict = {
+    "name": "Wikipedia Indonesia (Misteri & Legenda)",
+    "type": SourceType.mediawiki,
+    "base_url": "https://id.wikipedia.org",
+    "parser_config": {
+        "api_url": "https://id.wikipedia.org/w/api.php",
+        "ignore_robots": True,
+        "categories": [
+            "Hantu Indonesia",
+            "Legenda Indonesia",
+            "Cerita rakyat Indonesia",
+            "Makhluk legendaris Indonesia",
+            "Mitologi Indonesia",
+            "Kriminalitas di Indonesia",
+        ],
+        "limit": 6,
+        "max_total": 24,
+        "min_chars": 1200,
+    },
+    "crawl_interval_minutes": 720,
+    "priority": 7,
+}
+
 SEED_SOURCES: list[dict] = [
+    WIKIPEDIA_SOURCE,
     {
         "name": "Creepypasta Wiki (Fandom)",
         "type": SourceType.mediawiki,
@@ -73,6 +97,20 @@ SEED_SOURCES: list[dict] = [
         "priority": 6,
     },
 ]
+
+
+async def ensure_default_sources(session: AsyncSession) -> int:
+    created = 0
+    for spec in (WIKIPEDIA_SOURCE,):
+        exists = await session.scalar(select(Source.id).where(Source.name == spec["name"]))
+        if exists:
+            continue
+        session.add(Source(**spec))
+        created += 1
+    if created:
+        await session.commit()
+        log.info("seed.defaults.done", created=created)
+    return created
 
 
 async def seed_sources(session: AsyncSession) -> int:

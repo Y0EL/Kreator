@@ -17,6 +17,7 @@ from app.notifier.bot import dp
 from app.notifier.telegram import send_digest
 from app.pipeline.processor import process_new
 from app.scheduler import build_scheduler
+from app.seeds import ensure_default_sources
 
 log = get_logger(__name__)
 settings = get_settings()
@@ -27,6 +28,8 @@ bot = Bot(token=settings.telegram_bot_token)
 async def lifespan(_: FastAPI):
     configure_logging()
     await init_db()
+    async with SessionLocal() as session:
+        await ensure_default_sources(session)
     if settings.telegram_webhook_url:
         await bot.set_webhook(
             settings.telegram_webhook_url,

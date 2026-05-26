@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, clearToken } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
@@ -9,9 +9,30 @@ import { IconLogout, IconPlus, IconPower, IconTrash } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Empty, PageHeader, Skeleton } from "@/components/ui";
 
+const TYPE_LABEL: Record<string, string> = {
+  youtube: "YouTube",
+  rss: "RSS",
+  mediawiki: "Wikipedia & Wiki",
+  search: "Pencarian web",
+  reddit: "Reddit",
+  forum: "Forum",
+  submission: "Manual",
+  media: "Media",
+  blog_archive: "Arsip blog",
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { data, loading, refetch } = useApi(() => api.sources(), []);
+  const groups = useMemo(() => {
+    const m = new Map<string, SourceItem[]>();
+    for (const s of data || []) {
+      const arr = m.get(s.type) || [];
+      arr.push(s);
+      m.set(s.type, arr);
+    }
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
+  }, [data]);
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("rss");
   const [name, setName] = useState("");
@@ -120,28 +141,52 @@ export default function SettingsPage() {
             <Skeleton key={i} className="h-16" />
           ))}
         </div>
-      ) : data && data.length > 0 ? (
+      ) : groups.length > 0 ? (
         <div>
-          {data.map((s) => (
-            <div key={s.id} className="card mx-5 mb-3 flex items-center gap-3 rounded-2xl px-4 py-3">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  s.status === "active" ? "bg-accent" : "bg-faint"
-                }`}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-fg">{s.name}</div>
-                <div className="text-xs text-faint">
-                  <span className="uppercase tracking-wide">{s.type}</span> · {s.status}
-                </div>
+          {groups.map(([type, items]) => (
+            <section key={type} className="mb-2">
+              <div className="flex items-center gap-2 px-5 pb-2 pt-3">
+                <h2 className="text-[11px] font-semibold uppercase tracking-widest text-faint">
+                  {TYPE_LABEL[type] || type}
+                </h2>
+                <span className="tnum rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
+                  {items.length}
+                </span>
+                <span className="ml-auto text-[11px] text-faint">
+                  {items.filter((s) => s.status === "active").length} aktif
+                </span>
               </div>
-              <button onClick={() => toggle(s)} className="tap rounded-lg p-2 text-muted active:bg-surface-2">
-                <IconPower size={17} />
-              </button>
-              <button onClick={() => del(s)} className="tap rounded-lg p-2 text-muted active:text-accent">
-                <IconTrash size={17} />
-              </button>
-            </div>
+              {items.map((s) => (
+                <div
+                  key={s.id}
+                  className="card mx-5 mb-3 flex items-center gap-3 rounded-2xl px-4 py-3"
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      s.status === "active" ? "bg-accent" : "bg-faint"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-fg">{s.name}</div>
+                    <div className="text-xs text-faint">
+                      <span className="uppercase tracking-wide">{s.type}</span> · {s.status}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggle(s)}
+                    className="tap rounded-lg p-2 text-muted active:bg-surface-2"
+                  >
+                    <IconPower size={17} />
+                  </button>
+                  <button
+                    onClick={() => del(s)}
+                    className="tap rounded-lg p-2 text-muted active:text-accent"
+                  >
+                    <IconTrash size={17} />
+                  </button>
+                </div>
+              ))}
+            </section>
           ))}
         </div>
       ) : (

@@ -91,8 +91,9 @@ class RequestManager:
             log.warning("robots.fetch_failed", host=host)
             return None
 
-    async def get(self, url: str) -> httpx.Response:
-        await self._check_robots(url)
+    async def get(self, url: str, check_robots: bool = True) -> httpx.Response:
+        if check_robots:
+            await self._check_robots(url)
         host = urlsplit(url).netloc
         await self._respect_rate(host)
 
@@ -110,7 +111,7 @@ class RequestManager:
 
         return await _do()
 
-    async def get_json(self, url: str) -> dict:
-        resp = await self.get(url)
+    async def get_json(self, url: str, check_robots: bool = True) -> dict:
+        resp = await self.get(url, check_robots=check_robots)
         resp.raise_for_status()
         return resp.json()
