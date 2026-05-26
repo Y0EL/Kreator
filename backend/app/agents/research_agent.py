@@ -45,14 +45,20 @@ async def run_research(
         pack = ResearchPack(story_id=story.id)
         session.add(pack)
 
-    pack.core_summary = data.get("core_summary")
-    pack.timeline = data.get("timeline") or []
+    def _cl(v: object) -> str | None:
+        return sanitize_script(v) if isinstance(v, str) else None
+
+    def _cll(v: object) -> list:
+        return [sanitize_script(str(x)) for x in v] if isinstance(v, list) else []
+
+    pack.core_summary = _cl(data.get("core_summary"))
+    pack.timeline = _cll(data.get("timeline"))
     pack.sources = data.get("sources") or []
-    pack.proven = data.get("proven") or []
-    pack.speculative = data.get("speculative") or []
-    pack.open_loops = data.get("open_loops") or []
-    pack.angle = data.get("angle")
-    pack.confidence_notes = data.get("confidence_notes")
+    pack.proven = _cll(data.get("proven"))
+    pack.speculative = _cll(data.get("speculative"))
+    pack.open_loops = _cll(data.get("open_loops"))
+    pack.angle = _cl(data.get("angle"))
+    pack.confidence_notes = _cl(data.get("confidence_notes"))
 
     title = f"RESEARCH - {story.title or 'Untitled'} (story {story.id})"
     pack.drive_url = drive.save_doc(title, sanitize_script(_render(pack)))

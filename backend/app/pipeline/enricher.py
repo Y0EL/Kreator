@@ -5,6 +5,15 @@ from app.db.models import Story
 from app.llm import client
 from app.llm.prompts import ENRICH_SYSTEM, ENRICH_USER
 from app.logging import get_logger
+from app.util.textfix import sanitize_script
+
+
+def _clean(v: object) -> str | None:
+    return sanitize_script(v) if isinstance(v, str) else None
+
+
+def _clean_list(v: object) -> list:
+    return [sanitize_script(str(x)) for x in v] if isinstance(v, list) else []
 
 log = get_logger(__name__)
 
@@ -21,11 +30,11 @@ def enrich_story(story: Story) -> dict | None:
         log.error("enrich.failed", story_id=getattr(story, "id", None), error=str(e))
         return None
 
-    story.summary = data.get("summary")
+    story.summary = _clean(data.get("summary"))
     story.topic = data.get("topic")
-    story.subtopics = data.get("subtopics") or []
+    story.subtopics = _clean_list(data.get("subtopics"))
     story.entities = data.get("entities") or {}
-    story.timeline = data.get("timeline") or []
+    story.timeline = _clean_list(data.get("timeline"))
     story.tension_score = _as_float(data.get("tension_score"))
     story.estimated_minutes = _as_int(data.get("estimated_minutes"))
     story.confidence = _as_confidence(data.get("confidence"))
@@ -38,10 +47,10 @@ def enrich_story(story: Story) -> dict | None:
     vs = _as_int(data.get("viral_score")) or 0
     return {
         "viral_score": max(0, min(vs, 100)),
-        "viral_label": data.get("viral_label"),
-        "hook": data.get("viral_hook"),
-        "reasons": data.get("viral_reasons") or [],
-        "where_from": data.get("where_from"),
+        "viral_label": _clean(data.get("viral_label")),
+        "hook": _clean(data.get("viral_hook")),
+        "reasons": _clean_list(data.get("viral_reasons")),
+        "where_from": _clean(data.get("where_from")),
     }
 
 

@@ -17,7 +17,7 @@ from app.export.document import build_docx, build_pdf
 from app.integrations import r2
 from app.logging import configure_logging, get_logger
 from app.notifier.telegram import draft_keyboard, send_digest, send_document
-from app.pipeline.processor import process_new
+from app.pipeline.processor import process_new, rescore_existing
 from app.seeds import seed_sources
 from app.util.hashing import content_hash
 from app.voice.builder import build_voice_profiles
@@ -83,6 +83,47 @@ async def run_process(limit: int = 200) -> None:
     async with SessionLocal() as session:
         created = await process_new(session, limit=limit)
     log.info("stress.process", created=created, secs=round(time.monotonic() - t0, 1))
+
+
+async def run_rescore() -> None:
+    t0 = time.monotonic()
+    async with SessionLocal() as session:
+        queued = await rescore_existing(session)
+    log.info("stress.rescore", queued=queued, secs=round(time.monotonic() - t0, 1))
+
+
+async def run_cleantext() -> None:
+    from app.db.models import ResearchPack as RP
+    from app.db.models import StoryPitch
+    from app.util.textfix import sanitize_script
+
+    def cl(v):
+        return sanitize_script(v) if isinstance(v, str) else v
+
+    def cll(v):
+        return [sanitize_script(x) if isinstance(x, str) else x for x in v] if isinstance(v, list) else v
+
+    async with SessionLocal() as session:
+        stories = (await session.scalars(select(Story))).all()
+        for st in stories:
+            st.summary = cl(st.summary)
+            st.subtopics = cll(st.subtopics)
+            st.timeline = cll(st.timeline)
+        for p in (await session.scalars(select(StoryPitch))).all():
+            p.hook = cl(p.hook)
+            p.viral_label = cl(p.viral_label)
+            p.where_from = cl(p.where_from)
+            p.reasons = cll(p.reasons)
+        for rp in (await session.scalars(select(RP))).all():
+            rp.core_summary = cl(rp.core_summary)
+            rp.angle = cl(rp.angle)
+            rp.confidence_notes = cl(rp.confidence_notes)
+            rp.proven = cll(rp.proven)
+            rp.speculative = cll(rp.speculative)
+            rp.open_loops = cll(rp.open_loops)
+            rp.timeline = cll(rp.timeline)
+        await session.commit()
+    log.info("stress.cleantext", stories=len(stories))
 
 
 async def run_voice() -> None:
@@ -217,8 +258,8 @@ def main() -> None:
     parser.add_argument(
         "command",
         choices=[
-            "initdb", "seed", "sample", "crawl", "process", "voice", "script", "digest",
-            "senddraft", "metrics", "all"
+            "initdb", "seed", "sample", "crawl", "process", "rescore", "cleantext", "voice",
+            "script", "digest", "senddraft", "metrics", "all"
         ],
     )
     parser.add_argument("--drop", action="store_true")
@@ -238,6 +279,10 @@ def main() -> None:
             await run_crawl()
         elif args.command == "process":
             await run_process(limit=args.limit)
+        elif args.command == "rescore":
+            await run_rescore()
+        elif args.command == "cleantext":
+            await run_cleantext()
         elif args.command == "voice":
             await run_voice()
         elif args.command == "script":
