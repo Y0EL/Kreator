@@ -5,7 +5,7 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.enums import Decision, Priority, StoryStatus
+from app.db.enums import Decision, StoryStatus
 from app.db.models import CandidateQueue, RawItem, Story, StoryPitch, StoryScore
 from app.integrations import r2
 from app.logging import get_logger
@@ -59,7 +59,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
     score = scoring.compute_score(story, novelty=novelty)
     session.add(score)
 
-    if story.is_primary and score.priority in (Priority.A, Priority.B):
+    if story.is_primary:
         story.status = StoryStatus.queued
         session.add(
             CandidateQueue(story_id=story.id, status=StoryStatus.queued, priority=score.priority)
@@ -76,7 +76,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
                 )
             )
     else:
-        story.status = StoryStatus.duplicate if not story.is_primary else StoryStatus.scored
+        story.status = StoryStatus.duplicate
     return story
 
 
@@ -123,7 +123,7 @@ async def rescore_existing(session: AsyncSession, limit: int = 2000) -> int:
         sc.final_score = final
         priority = scoring._priority(final, story)
         sc.priority = priority
-        if story.is_primary and priority in (Priority.A, Priority.B):
+        if story.is_primary:
             cand = await session.scalar(
                 select(CandidateQueue).where(CandidateQueue.story_id == story.id)
             )

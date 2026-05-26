@@ -78,18 +78,18 @@ def _format_candidate(
     summary = html.escape((story.summary or "")[:420])
     title = html.escape(story.title or "Tanpa judul")
     lines = [
-        f"🔥 <b>{title}</b>",
-        f"📊 Skor {fs} . Prioritas {prio} . Confidence {conf}",
-        f"⏱ sekitar {dur} menit . 🏷 {topic}",
-        f"🔗 Sumber: {html.escape(_domain(source_url))}",
+        f"<b>{title}</b>",
+        f"Skor {fs} . Prioritas {prio} . Confidence {conf}",
+        f"Sekitar {dur} menit . {topic}",
+        f"Sumber: {html.escape(_domain(source_url))}",
     ]
     if pitch:
         vl = html.escape(pitch.viral_label or "-")
-        lines.append(f"📈 Potensi viral {pitch.viral_score}/100 ({vl})")
+        lines.append(f"Potensi viral {pitch.viral_score}/100 ({vl})")
         for r in (pitch.reasons or [])[:3]:
-            lines.append(f"  • {html.escape(str(r))}")
+            lines.append(f"- {html.escape(str(r))}")
         if pitch.where_from:
-            lines.append(f"📍 Info dari: {html.escape(str(pitch.where_from)[:160])}")
+            lines.append(f"Info dari: {html.escape(str(pitch.where_from)[:160])}")
     body = "\n".join(lines)
     return f"{body}\n\n{summary}"
 
@@ -137,7 +137,7 @@ async def send_digest(
             await send_text("Belum ada kandidat untuk digest.")
         return 0
 
-    await send_text(f"📋 Digest: {len(rows)} kandidat teratas. Pilih lewat tombol di tiap cerita.")
+    await send_text(f"Digest: {len(rows)} kandidat teratas. Pilih lewat tombol di tiap cerita.")
     for story, score, source_url, pitch in rows:
         resp = await _post(
             "sendMessage",

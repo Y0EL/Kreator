@@ -37,13 +37,13 @@ async def run_collection() -> None:
     try:
         if candidates > 0:
             await send_text(
-                f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
-                f"{candidates} kandidat lolos filter. Digest dikirim, tinggal approve."
+                f"Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
+                f"{candidates} kandidat baru. Digest dikirim, tinggal approve."
             )
         else:
             await send_text(
-                f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
-                "belum ada yang lolos filter."
+                f"Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
+                "belum ada item baru."
             )
     except Exception:
         pass

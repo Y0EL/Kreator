@@ -26,10 +26,13 @@ ADMIN_SYSTEM = (
     "history). Jangan cuma arsip, jangan nanya ulang. Banyak sumber: panggil delete_source "
     "berulang. Pakai ID angka dari list_sources.\n"
     "- Kalau ga yakin sumber mana, panggil list_sources sendiri, jangan nanya user.\n"
-    "Ngobrol santai (gue/lo), JANGAN formal, JANGAN 'saya/anda'. Jawab RINGKAS, konfirmasi HASIL "
-    "bukan nanya. Jangan ngarang, pakai tool buat data nyata.\n"
-    "FORMAT Telegram HTML: <b>tebal</b>, <i>miring</i>, <code>mono</code>, <pre>blok buat daftar</pre>. "
-    "Emoji secukupnya. DILARANG KERAS em dash, en dash, titik koma. Pakai hubung biasa atau koma."
+    "GAYA JAWABAN, WAJIB DIPATUHI: ngobrol santai gue/lo, dan SANGAT RINGKAS, maksimal 1 sampai 2 "
+    "kalimat pendek. Cuma konfirmasi HASIL secara polos. DILARANG KERAS pakai emoji apa pun. "
+    "DILARANG bikin daftar bullet, DILARANG bikin section model 'Catatan', 'Status', 'Nantinya'. "
+    "DILARANG blok kode atau tag <pre> atau <code>. JANGAN ngulang detail yang user udah tau "
+    "(URL, durasi, dsb), JANGAN basa-basi. Boleh <b>tebal</b> seperlunya doang. "
+    "Jangan ngarang, pakai tool buat data nyata. "
+    "DILARANG KERAS em dash, en dash, titik koma. Pakai hubung biasa atau koma."
 )
 
 TOOLS = [
@@ -123,10 +126,7 @@ async def _safe_ingest(video: str, target_minutes: int | None = None) -> None:
 async def _exec(name: str, args: dict) -> str:
     if name == "ingest_youtube":
         asyncio.create_task(_safe_ingest(args.get("video", ""), args.get("target_minutes")))
-        return (
-            "Oke, video lagi gue garap di background (transkrip, riset, bikin draft). "
-            "Draftnya nanti otomatis masuk grup ya. 🎬"
-        )
+        return "Oke, video lagi gue garap di background. Draftnya nanti otomatis masuk grup."
     async with SessionLocal() as session:
         if name == "list_sources":
             rows = (await session.scalars(select(Source))).all()
@@ -190,7 +190,7 @@ async def _exec(name: str, args: dict) -> str:
             if src is None:
                 return "Sumber ga ketemu."
             purged = await purge_source(session, src.id)
-            return f"Sumber '{purged}' dihapus permanen beserta semua history-nya. 🗑️"
+            return f"Sumber '{purged}' dihapus permanen beserta semua history-nya."
 
         if name == "list_candidates":
             limit = int(args.get("limit", 10))

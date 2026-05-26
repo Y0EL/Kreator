@@ -56,7 +56,7 @@ async def on_approve(cb: CallbackQuery) -> None:
     story_id = _story_id(cb.data or "")
     await cb.answer("Approved. Lagi riset dan nulis draft, tunggu sebentar.")
     if cb.message:
-        await cb.message.edit_text((cb.message.text or "") + "\n\n✅ Disetujui. Sedang digarap...")
+        await cb.message.edit_text((cb.message.text or "") + "\n\nDisetujui. Sedang digarap.")
     await _set_decision(story_id, Decision.approve, StoryStatus.approved)
     asyncio.create_task(_safe_generate(story_id))
 
@@ -67,7 +67,7 @@ async def on_reject(cb: CallbackQuery) -> None:
     await _set_decision(story_id, Decision.reject, StoryStatus.scored)
     await cb.answer("Ditolak.")
     if cb.message:
-        await cb.message.edit_text((cb.message.text or "") + "\n\n❌ Ditolak.")
+        await cb.message.edit_text((cb.message.text or "") + "\n\nDitolak.")
 
 
 @dp.callback_query(F.data.startswith("act:later:"))
@@ -76,7 +76,7 @@ async def on_later(cb: CallbackQuery) -> None:
     await _set_decision(story_id, Decision.later, StoryStatus.queued)
     await cb.answer("Disimpan untuk nanti.")
     if cb.message:
-        await cb.message.edit_text((cb.message.text or "") + "\n\n⏳ Disimpan untuk nanti.")
+        await cb.message.edit_text((cb.message.text or "") + "\n\nDisimpan untuk nanti.")
 
 
 @dp.callback_query(F.data.startswith("act:deep:"))
@@ -84,7 +84,7 @@ async def on_deep(cb: CallbackQuery) -> None:
     story_id = _story_id(cb.data or "")
     await cb.answer("Deep research dijalankan, sama seperti approve lalu generate.")
     if cb.message:
-        await cb.message.edit_text((cb.message.text or "") + "\n\n🔍 Deep research...")
+        await cb.message.edit_text((cb.message.text or "") + "\n\nDeep research.")
     await _set_decision(story_id, Decision.deep_research, StoryStatus.researching)
     asyncio.create_task(_safe_generate(story_id))
 
@@ -100,7 +100,7 @@ async def on_regen(cb: CallbackQuery) -> None:
 
 @dp.callback_query(F.data.startswith("draft:ok:"))
 async def on_ok(cb: CallbackQuery) -> None:
-    await cb.answer("Sip, dipakai. 👍")
+    await cb.answer("Sip, dipakai.")
 
 
 def _mentioned(msg: Message) -> bool:
@@ -172,7 +172,7 @@ async def on_message(msg: Message) -> None:
             )
     except Exception as e:
         log.error("bot.message_failed", error=str(e))
-        reply = "Waduh error pas ngeproses, coba lagi ya. 😵"
+        reply = "Waduh error pas ngeproses, coba lagi ya."
     await _send_reply(msg, reply)
 
 

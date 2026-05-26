@@ -90,16 +90,16 @@ async def _bg_action(name: str) -> None:
                 if candidates > 0:
                     progress.step("Kirim kandidat ke Telegram", 88)
                     sent = await send_digest(session, unsent_only=True)
-                progress.done(f"{candidates} kandidat lolos filter")
+                progress.done(f"{candidates} kandidat baru")
                 await send_text(
-                    f"🕷️ Crawl penuh kelar. {len(jobs)} sumber, {new_items} item baru, "
-                    f"{candidates} kandidat lolos filter, {sent} dikirim."
+                    f"Crawl penuh kelar. {len(jobs)} sumber, {new_items} item baru, "
+                    f"{candidates} kandidat baru, {sent} dikirim."
                 )
             elif name == "crawl":
                 jobs = await crawl_active_sources(session)
                 new_items = sum(getattr(j, "items_new", 0) for j in jobs)
                 progress.done(f"{len(jobs)} sumber, {new_items} item baru")
-                await send_text(f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru.")
+                await send_text(f"Crawl kelar. {len(jobs)} sumber, {new_items} item baru.")
             elif name == "process":
                 created = await process_new(session)
                 progress.done(f"{created} kandidat baru")
@@ -109,7 +109,7 @@ async def _bg_action(name: str) -> None:
             elif name == "rescore":
                 queued = await rescore_existing(session)
                 progress.done(f"{queued} kandidat baru dari bahan lama")
-                await send_text(f"🔁 Skor ulang kelar. {queued} kandidat baru muncul.")
+                await send_text(f"Skor ulang kelar. {queued} kandidat baru muncul.")
     except Exception as e:
         progress.fail(str(e))
         log.error("api.action_failed", name=name, error=str(e))
