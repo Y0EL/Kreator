@@ -93,6 +93,8 @@ async def run_rescore() -> None:
 
 
 async def run_cleantext() -> None:
+    import html
+
     from app.db.models import ResearchPack as RP
     from app.db.models import StoryPitch
     from app.util.textfix import sanitize_script
@@ -103,9 +105,15 @@ async def run_cleantext() -> None:
     def cll(v):
         return [sanitize_script(x) if isinstance(x, str) else x for x in v] if isinstance(v, list) else v
 
+    def unesc(v):
+        return html.unescape(v) if isinstance(v, str) else v
+
     async with SessionLocal() as session:
+        for ri in (await session.scalars(select(RawItem))).all():
+            ri.title = unesc(ri.title)
         stories = (await session.scalars(select(Story))).all()
         for st in stories:
+            st.title = unesc(st.title)
             st.summary = cl(st.summary)
             st.subtopics = cll(st.subtopics)
             st.timeline = cll(st.timeline)

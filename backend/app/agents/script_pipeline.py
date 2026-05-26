@@ -163,24 +163,29 @@ async def generate_draft(
             80 + int(11 * i / n),
             story_id=story.id,
         )
-        text = await asyncio.to_thread(
-            client.complete,
-            system=DRAFT_SYSTEM,
-            user=SEGMENT_USER.format(
-                voice_card=voice,
-                exemplars=exem,
-                ledger=ledger,
-                previous=_tail(written, 700),
-                name=seg["name"],
-                tone=seg["tone"] or "naratif, menegangkan",
-                poin="\n".join(f"- {p}" for p in seg["poin"]) or "-",
-                target_words=seg["target_words"],
-            ),
-            tier=_WRITER_TIER,
-            temperature=0.8,
-            max_tokens=min(8000, seg["target_words"] * 4 + 200),
+        user_prompt = SEGMENT_USER.format(
+            voice_card=voice,
+            exemplars=exem,
+            ledger=ledger,
+            previous=_tail(written, 700),
+            name=seg["name"],
+            tone=seg["tone"] or "naratif, menegangkan",
+            poin="\n".join(f"- {p}" for p in seg["poin"]) or "-",
+            target_words=seg["target_words"],
         )
-        written.append((seg["name"], sanitize_script(text).strip()))
+        text = await asyncio.to_thread(
+            client.complete, system=DRAFT_SYSTEM, user=user_prompt,
+            tier=_WRITER_TIER, temperature=0.8,
+        )
+        clean = sanitize_script(text).strip()
+        if not clean:
+            text = await asyncio.to_thread(
+                client.complete, system=DRAFT_SYSTEM, user=user_prompt,
+                tier="quality", temperature=0.8,
+            )
+            clean = sanitize_script(text).strip()
+            log.warning("script.segment_empty_retry", story_id=story.id, segment=seg["name"])
+        written.append((seg["name"], clean))
 
     progress.step("Cek panjang dan rapikan", 92, story_id=story.id)
     expansions = 0
@@ -202,7 +207,6 @@ async def generate_draft(
                 ),
                 tier=_WRITER_TIER,
                 temperature=0.8,
-                max_tokens=min(8000, seg["target_words"] * 4 + 200),
             )
             expanded = sanitize_script(expanded).strip()
             if len(expanded.split()) > wc:

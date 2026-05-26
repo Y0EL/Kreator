@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +47,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
 
     story = Story(
         raw_item_id=item.id,
-        title=item.title,
+        title=html.unescape(item.title) if item.title else None,
         cleaned_text=cleaned,
         language=detect_language(cleaned),
         status=StoryStatus.cleaned,
