@@ -127,7 +127,8 @@ async def _pick_persona(session: AsyncSession, persona: str | None) -> str:
 async def generate_outline(story: Story, pack: ResearchPack | None) -> dict:
     story.status = StoryStatus.outline
     minutes = story.estimated_minutes or 15
-    return client.complete_json(
+    return await asyncio.to_thread(
+        client.complete_json,
         system=OUTLINE_SYSTEM,
         user=OUTLINE_USER.format(minutes=minutes, evidence=_evidence_text(pack, story)),
         tier="quality",

@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import re
-import tempfile
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 from app.config import get_settings
 from app.crawler.base import SourceAdapter
 from app.crawler.types import RawItemData
-from app.llm import client
 from app.logging import get_logger
 
 log = get_logger(__name__)
@@ -51,6 +48,10 @@ def _parse_dt(value: str | None) -> datetime | None:
 
 
 def _fetch_caption(video_id: str, proxy: str | None) -> str:
+    key = get_settings().supadata_api_key
+    if key:
+        return _fetch_supadata(video_id, key)
+
     from youtube_transcript_api import YouTubeTranscriptApi
 
     proxies = {"http": proxy, "https": proxy} if proxy else None
@@ -60,24 +61,44 @@ def _fetch_caption(video_id: str, proxy: str | None) -> str:
     return " ".join(seg["text"] for seg in segments).strip()
 
 
-def _fetch_whisper(video_id: str) -> str:
-    import yt_dlp
+def _supadata_text(content: object) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        return " ".join(
+            str(c.get("text", "")) for c in content if isinstance(c, dict)
+        ).strip()
+    return ""
 
-    with tempfile.TemporaryDirectory() as tmp:
-        out_tmpl = os.path.join(tmp, "audio.%(ext)s")
-        opts = {
-            "format": "worstaudio/bestaudio/best",
-            "outtmpl": out_tmpl,
-            "quiet": True,
-            "noplaylist": True,
-            "no_warnings": True,
-        }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=True)
-        files = [os.path.join(tmp, f) for f in os.listdir(tmp)]
-        if not files:
+
+def _fetch_supadata(video_id: str, key: str) -> str:
+    import time
+
+    import httpx
+
+    headers = {"x-api-key": key}
+    params = {"url": f"https://www.youtube.com/watch?v={video_id}", "text": "true", "lang": "id"}
+    with httpx.Client(timeout=60) as c:
+        r = c.get("https://api.supadata.ai/v1/transcript", params=params, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+        text = _supadata_text(data.get("content"))
+        if text:
+            return text
+        job_id = data.get("jobId") or data.get("id")
+        if not job_id:
             return ""
-        return client.transcribe(files[0])
+        for _ in range(20):
+            time.sleep(3)
+            jr = c.get(f"https://api.supadata.ai/v1/transcript/{job_id}", headers=headers)
+            jr.raise_for_status()
+            jd = jr.json()
+            status = jd.get("status")
+            if status in ("completed", "succeeded", "done"):
+                return _supadata_text(jd.get("content") or jd.get("transcript"))
+            if status in ("failed", "error"):
+                return ""
+    return ""
 
 
 class YouTubeAdapter(SourceAdapter):
@@ -141,15 +162,8 @@ class YouTubeAdapter(SourceAdapter):
 
     async def _transcript(self, video_id: str) -> str | None:
         proxy = get_settings().crawl_proxy_url or None
-        mode = self.config.get("transcript_mode", "caption_then_whisper")
-        if mode != "whisper":
-            try:
-                return await asyncio.to_thread(_fetch_caption, video_id, proxy)
-            except Exception as e:
-                log.warning("youtube.caption_failed", video_id=video_id, error=str(e))
-        if mode in ("caption_then_whisper", "whisper"):
-            try:
-                return await asyncio.to_thread(_fetch_whisper, video_id)
-            except Exception as e:
-                log.warning("youtube.whisper_failed", video_id=video_id, error=str(e))
-        return None
+        try:
+            return await asyncio.to_thread(_fetch_caption, video_id, proxy)
+        except Exception as e:
+            log.warning("youtube.caption_failed", video_id=video_id, error=str(e))
+            return None

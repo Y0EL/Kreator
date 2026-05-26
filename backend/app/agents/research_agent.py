@@ -32,7 +32,8 @@ async def run_research(
                 "\n\nINFORMASI TAMBAHAN DARI WEB (utamakan ini bila lebih akurat dan terbaru):\n"
                 + findings
             )
-    data = client.complete_json(
+    data = await asyncio.to_thread(
+        client.complete_json,
         system=RESEARCH_SYSTEM,
         user=RESEARCH_USER.format(text=story.cleaned_text[:_MAX_CHARS]) + extra,
         tier="quality",

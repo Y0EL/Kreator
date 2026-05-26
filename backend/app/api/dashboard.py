@@ -381,7 +381,6 @@ async def add_source(body: SourceBody, session: AsyncSession = Depends(get_sessi
                 "channels": body.channels or [],
                 "years_ago": 1,
                 "max_per_channel": 5,
-                "transcript_mode": "caption_then_whisper",
             },
         )
     else:

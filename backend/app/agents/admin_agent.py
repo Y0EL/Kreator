@@ -150,7 +150,6 @@ async def _exec(name: str, args: dict) -> str:
                         "channels": [channel],
                         "years_ago": 1,
                         "max_per_channel": 5,
-                        "transcript_mode": "caption_then_whisper",
                     },
                 )
                 session.add(src)

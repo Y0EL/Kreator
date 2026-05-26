@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +38,8 @@ def _load_raw_text(item: RawItem) -> str:
 
 
 async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None:
-    cleaned = clean_text(_load_raw_text(item))
+    raw = await asyncio.to_thread(_load_raw_text, item)
+    cleaned = clean_text(raw)
     if len(cleaned) < _MIN_CLEAN_CHARS:
         log.info("processor.skip_short", raw_item_id=item.id)
         return None
@@ -51,7 +54,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
     session.add(story)
     await session.flush()
 
-    pitch = enrich_story(story)
+    pitch = await asyncio.to_thread(enrich_story, story)
     novelty = await dedup.assign_cluster(session, story)
     score = scoring.compute_score(story, novelty=novelty)
     session.add(score)

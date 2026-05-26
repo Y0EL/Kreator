@@ -39,7 +39,7 @@ export default function ReaderPage() {
         timer = setTimeout(load, busy ? 3500 : 12000);
         return;
       } catch {
-        /* ignore */
+        if (alive) setScripts((prev) => prev ?? []);
       }
       timer = setTimeout(load, 6000);
     }

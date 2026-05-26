@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.agents.delivery import generate_and_deliver
 from app.config import get_settings
-from app.crawler.adapters.youtube import _fetch_caption, _fetch_whisper, extract_video_id
+from app.crawler.adapters.youtube import _fetch_caption, extract_video_id
 from app.db.enums import SourceType
 from app.db.models import RawItem, Source, Story
 from app.db.session import SessionLocal
@@ -60,13 +60,9 @@ async def ingest_youtube(
     proxy = s.crawl_proxy_url or None
     try:
         text = await asyncio.to_thread(_fetch_caption, vid, proxy)
-    except Exception:
-        progress.step("Transkrip audio (Whisper)", 30, title=title)
-        try:
-            text = await asyncio.to_thread(_fetch_whisper, vid)
-        except Exception as e:
-            progress.fail(f"Gagal transkrip: {e}")
-            return f"Gagal ambil transkrip video {vid}: {e}"
+    except Exception as e:
+        progress.fail(f"Transkrip ga tersedia: {e}")
+        return f"Gagal ambil transkrip video {vid}: {e}"
     if not text or len(text) < 500:
         progress.fail("Transkrip kosong atau kependek.")
         return "Transkrip kosong atau kependek, ga bisa diproses."
