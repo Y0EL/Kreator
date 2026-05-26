@@ -156,6 +156,13 @@ export type YtVideo = {
   published_at: string | null;
 };
 
+export type YtPlaylist = {
+  playlist_id: string;
+  title: string | null;
+  thumbnail: string | null;
+  count: number;
+};
+
 export type OwnChannel = {
   channel: YtChannel | null;
   videos: YtVideo[];

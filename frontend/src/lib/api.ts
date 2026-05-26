@@ -10,6 +10,7 @@ import type {
   Stats,
   StoryDetail,
   YtChannel,
+  YtPlaylist,
   YtStat,
   YtVideo,
 } from "@/lib/types";
@@ -112,9 +113,13 @@ export const api = {
     bustCache("yt:");
     return r;
   },
-  channelVideos: (channelId: string, limit = 12) =>
+  channelVideos: (channelId: string, limit = 20) =>
     cached(`yt:videos:${channelId}:${limit}`, 600_000, () =>
       req<YtVideo[]>(`/api/youtube/channel/${encodeURIComponent(channelId)}/videos?limit=${limit}`),
+    ),
+  channelPlaylists: (channelId: string, limit = 20) =>
+    cached(`yt:playlists:${channelId}:${limit}`, 600_000, () =>
+      req<YtPlaylist[]>(`/api/youtube/channel/${encodeURIComponent(channelId)}/playlists?limit=${limit}`),
     ),
   bulkDeleteSources: (ids: number[]) =>
     req<{ ok: boolean; deleted: number }>("/api/sources/bulk_delete", {

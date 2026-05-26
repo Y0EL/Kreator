@@ -40,6 +40,7 @@ from app.services.youtube_channels import (
     snapshot_channel_stats,
 )
 from app.services.youtube_ingest import ingest_youtube
+from app.services.youtube_scrape import list_channel_playlists, list_channel_videos
 
 log = get_logger(__name__)
 
@@ -600,48 +601,28 @@ async def youtube_channel_remove(
 
 
 @router.get("/youtube/channel/{channel_id}/videos")
-async def youtube_channel_videos(channel_id: str, limit: int = 12) -> list[dict]:
-    key = get_settings().youtube_api_key
-    if not key:
-        return []
-    limit = max(1, min(limit, 24))
+async def youtube_channel_videos(channel_id: str, limit: int = 20) -> list[dict]:
+    limit = max(1, min(limit, 50))
     ckey = f"yt:videos:{channel_id}:{limit}"
     cached = cache.get(ckey)
     if cached is not None:
         return cached
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params={"part": "snippet", "channelId": channel_id, "type": "video",
-                    "order": "date", "maxResults": limit, "key": key},
-        )
-        items = r.json().get("items", [])
-        snip = {
-            it["id"]["videoId"]: it.get("snippet", {})
-            for it in items
-            if it.get("id", {}).get("videoId")
-        }
-        vids = list(snip.keys())
-        stats: dict[str, dict] = {}
-        if vids:
-            rs = await client.get(
-                "https://www.googleapis.com/youtube/v3/videos",
-                params={"part": "statistics", "id": ",".join(vids), "key": key},
-            )
-            for it in rs.json().get("items", []):
-                stats[it.get("id")] = it.get("statistics", {})
-    out: list[dict] = []
-    for vid in vids:
-        sn = snip[vid]
-        th = sn.get("thumbnails", {})
-        out.append({
-            "video_id": vid,
-            "title": sn.get("title"),
-            "thumbnail": (th.get("medium") or th.get("default") or {}).get("url"),
-            "views": int(stats.get(vid, {}).get("viewCount", 0)),
-            "published_at": sn.get("publishedAt"),
-        })
-    cache.set(ckey, out, 1800)
+    out = await asyncio.to_thread(list_channel_videos, channel_id, limit)
+    if out:
+        cache.set(ckey, out, 1800)
+    return out
+
+
+@router.get("/youtube/channel/{channel_id}/playlists")
+async def youtube_channel_playlists(channel_id: str, limit: int = 20) -> list[dict]:
+    limit = max(1, min(limit, 50))
+    ckey = f"yt:playlists:{channel_id}:{limit}"
+    cached = cache.get(ckey)
+    if cached is not None:
+        return cached
+    out = await asyncio.to_thread(list_channel_playlists, channel_id, limit)
+    if out:
+        cache.set(ckey, out, 1800)
     return out
 
 
