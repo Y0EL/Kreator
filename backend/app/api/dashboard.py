@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -509,7 +510,7 @@ async def _channel_stats(client: httpx.AsyncClient, channel: str, key: str) -> d
     return {
         "channel": channel,
         "channel_id": it.get("id"),
-        "title": sn.get("title"),
+        "title": html.unescape(sn.get("title") or "") or None,
         "thumbnail": sn.get("thumbnails", {}).get("default", {}).get("url"),
         "subscribers": int(st.get("subscriberCount", 0)),
         "views": int(st.get("viewCount", 0)),

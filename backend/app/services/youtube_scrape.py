@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import html
+
 from app.logging import get_logger
 
 log = get_logger(__name__)
+
+
+def _title(t: object) -> str | None:
+    return html.unescape(t) if isinstance(t, str) else None
 
 
 def _flat(url: str, limit: int) -> list[dict]:
@@ -41,7 +47,7 @@ def list_channel_videos(channel_id: str, limit: int = 20) -> list[dict]:
             continue
         out.append({
             "video_id": vid,
-            "title": e.get("title"),
+            "title": _title(e.get("title")),
             "thumbnail": _thumb(e, f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"),
             "views": int(e.get("view_count") or 0),
             "published_at": None,
@@ -63,7 +69,7 @@ def list_channel_playlists(channel_id: str, limit: int = 20) -> list[dict]:
             continue
         out.append({
             "playlist_id": pid,
-            "title": e.get("title"),
+            "title": _title(e.get("title")),
             "thumbnail": _thumb(e, None),
             "count": int(e.get("playlist_count") or e.get("video_count") or 0),
         })
