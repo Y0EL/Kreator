@@ -6,7 +6,7 @@ import { useApi } from "@/lib/use-api";
 import { StoryCard } from "@/components/story-card";
 import { SystemStatus } from "@/components/system-status";
 import { Empty, PageHeader, Skeleton, StatBlock } from "@/components/ui";
-import { IconActivity, IconSend, IconStack } from "@/components/icons";
+import { IconActivity, IconRefresh } from "@/components/icons";
 
 const today = new Date().toLocaleDateString("id-ID", {
   weekday: "long",
@@ -74,9 +74,8 @@ export default function HomePage() {
       <SystemStatus />
 
       <div className="flex gap-2 px-5 pt-4">
-        <QuickAction label="Crawl" Icon={IconActivity} busy={busy === "crawl"} onClick={() => trigger("crawl")} />
-        <QuickAction label="Proses" Icon={IconStack} busy={busy === "process"} onClick={() => trigger("process")} />
-        <QuickAction label="Digest" Icon={IconSend} busy={busy === "digest"} onClick={() => trigger("digest")} />
+        <QuickAction label="Crawl penuh" Icon={IconActivity} busy={busy === "cycle"} onClick={() => trigger("cycle")} />
+        <QuickAction label="Skor ulang" Icon={IconRefresh} busy={busy === "rescore"} onClick={() => trigger("rescore")} />
       </div>
 
       <h2 className="px-5 pt-8 pb-1 text-[11px] font-semibold uppercase tracking-widest text-faint">
@@ -90,7 +89,7 @@ export default function HomePage() {
           ))}
         </div>
       ) : top.length === 0 ? (
-        <Empty>Belum ada kandidat. Jalanin Crawl + Proses dulu.</Empty>
+        <Empty>Belum ada kandidat. Pencet Crawl penuh dulu.</Empty>
       ) : (
         <div>
           {top.map((c) => (

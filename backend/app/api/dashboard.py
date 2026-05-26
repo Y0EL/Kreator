@@ -26,7 +26,7 @@ from app.db.models import (
 from app.db.session import SessionLocal, get_session
 from app.logging import get_logger
 from app.notifier.telegram import send_digest, send_text
-from app.pipeline.processor import process_new
+from app.pipeline.processor import process_new, rescore_existing
 from app.scheduler import status as scheduler_status
 from app.services import progress
 from app.services.sources import purge_source
@@ -70,22 +70,46 @@ async def _bg_ingest(
 
 
 async def _bg_action(name: str) -> None:
-    labels = {"crawl": "Crawl sumber", "process": "Memproses item", "digest": "Kirim digest"}
+    labels = {
+        "cycle": "Crawl penuh",
+        "crawl": "Crawl sumber",
+        "process": "Memproses item",
+        "digest": "Kirim digest",
+        "rescore": "Skor ulang bahan",
+    }
     progress.start(name, labels.get(name, name))
-    progress.step(labels.get(name, name), 30)
+    progress.step(labels.get(name, name), 20)
     try:
         async with SessionLocal() as session:
-            if name == "crawl":
+            if name == "cycle":
+                jobs = await crawl_active_sources(session)
+                new_items = sum(getattr(j, "items_new", 0) for j in jobs)
+                progress.step("Filter dan skor kandidat", 60)
+                candidates = await process_new(session)
+                sent = 0
+                if candidates > 0:
+                    progress.step("Kirim kandidat ke Telegram", 88)
+                    sent = await send_digest(session, unsent_only=True)
+                progress.done(f"{candidates} kandidat lolos filter")
+                await send_text(
+                    f"🕷️ Crawl penuh kelar. {len(jobs)} sumber, {new_items} item baru, "
+                    f"{candidates} kandidat lolos filter, {sent} dikirim."
+                )
+            elif name == "crawl":
                 jobs = await crawl_active_sources(session)
                 new_items = sum(getattr(j, "items_new", 0) for j in jobs)
                 progress.done(f"{len(jobs)} sumber, {new_items} item baru")
-                await send_text(f"🕷️ Crawl manual kelar. {len(jobs)} sumber, {new_items} item baru.")
+                await send_text(f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru.")
             elif name == "process":
                 created = await process_new(session)
                 progress.done(f"{created} kandidat baru")
             elif name == "digest":
                 sent = await send_digest(session)
                 progress.done(f"{sent} kandidat dikirim")
+            elif name == "rescore":
+                queued = await rescore_existing(session)
+                progress.done(f"{queued} kandidat baru dari bahan lama")
+                await send_text(f"🔁 Skor ulang kelar. {queued} kandidat baru muncul.")
     except Exception as e:
         progress.fail(str(e))
         log.error("api.action_failed", name=name, error=str(e))
@@ -448,7 +472,7 @@ async def system() -> dict:
 
 @router.post("/actions/{name}")
 async def action(name: str) -> dict:
-    if name not in ("crawl", "process", "digest"):
+    if name not in ("cycle", "crawl", "process", "digest", "rescore"):
         raise HTTPException(status_code=400, detail="aksi ga dikenal")
     asyncio.create_task(_bg_action(name))
     return {"ok": True, "started": name}

@@ -5,8 +5,8 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.enums import Priority, StoryStatus
-from app.db.models import CandidateQueue, RawItem, Story, StoryPitch
+from app.db.enums import Decision, Priority, StoryStatus
+from app.db.models import CandidateQueue, RawItem, Story, StoryPitch, StoryScore
 from app.integrations import r2
 from app.logging import get_logger
 from app.pipeline import dedup, scoring
@@ -97,3 +97,49 @@ async def process_new(session: AsyncSession, limit: int = 200) -> int:
             log.error("processor.item_failed", raw_item_id=item.id, error=str(e))
     log.info("processor.done", candidates=candidates, stories=stories, scanned=len(items))
     return candidates
+
+
+async def rescore_existing(session: AsyncSession, limit: int = 2000) -> int:
+    rows = (
+        await session.execute(
+            select(Story, StoryScore)
+            .join(StoryScore, StoryScore.story_id == Story.id)
+            .limit(limit)
+        )
+    ).all()
+    queued = 0
+    for story, sc in rows:
+        comp = {
+            "engagement": sc.engagement,
+            "freshness": sc.freshness,
+            "novelty": sc.novelty,
+            "narrative_depth": sc.narrative_depth,
+            "horror_fit": sc.horror_fit,
+            "reliability": sc.reliability,
+            "audience_match": sc.audience_match,
+        }
+        has_eng = (sc.engagement or 0) > 0
+        final = scoring.weighted_final(comp, has_eng)
+        sc.final_score = final
+        priority = scoring._priority(final, story)
+        sc.priority = priority
+        if story.is_primary and priority in (Priority.A, Priority.B):
+            cand = await session.scalar(
+                select(CandidateQueue).where(CandidateQueue.story_id == story.id)
+            )
+            if cand is None:
+                story.status = StoryStatus.queued
+                session.add(
+                    CandidateQueue(
+                        story_id=story.id, status=StoryStatus.queued, priority=priority
+                    )
+                )
+                queued += 1
+            elif cand.decision == Decision.pending and cand.status != StoryStatus.queued:
+                cand.status = StoryStatus.queued
+                cand.priority = priority
+                story.status = StoryStatus.queued
+                queued += 1
+        await session.commit()
+    log.info("processor.rescored", count=len(rows), queued=queued)
+    return queued

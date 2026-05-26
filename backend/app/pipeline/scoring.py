@@ -62,6 +62,12 @@ def _reliability(story: Story) -> float:
     )
 
 
+def weighted_final(comp: dict[str, float], has_engagement: bool) -> float:
+    weights = {k: v for k, v in WEIGHTS.items() if has_engagement or k != "engagement"}
+    total_w = sum(weights.values()) or 1.0
+    return round(sum(weights[k] * comp[k] for k in weights) / total_w, 4)
+
+
 def compute_score(story: Story, novelty: float, audience_match: float = 0.5) -> StoryScore:
     comp = {
         "engagement": _engagement(story),
@@ -72,11 +78,13 @@ def compute_score(story: Story, novelty: float, audience_match: float = 0.5) -> 
         "reliability": _reliability(story),
         "audience_match": audience_match,
     }
-    final = sum(WEIGHTS[k] * v for k, v in comp.items())
+    item = story.raw_item
+    has_engagement = bool(item and ((item.view_count or 0) > 0 or (item.reply_count or 0) > 0))
+    final = weighted_final(comp, has_engagement)
     return StoryScore(
         story_id=story.id,
         **comp,
-        final_score=round(final, 4),
+        final_score=final,
         priority=_priority(final, story),
     )
 
@@ -84,10 +92,10 @@ def compute_score(story: Story, novelty: float, audience_match: float = 0.5) -> 
 def _priority(final: float, story: Story) -> Priority:
     if not story.is_primary:
         return Priority.reject
-    if final >= 0.75:
+    if final >= 0.70:
         return Priority.A
-    if final >= 0.62:
+    if final >= 0.58:
         return Priority.B
-    if final >= 0.5:
+    if final >= 0.48:
         return Priority.C
     return Priority.reject

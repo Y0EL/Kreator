@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     web_search_model: str = "gpt-4o-search-preview"
     tavily_api_key: str = ""
     supadata_api_key: str = ""
+    firecrawl_api_key: str = ""
 
     telegram_bot_token: str = ""
     telegram_group_chat_id: str = ""

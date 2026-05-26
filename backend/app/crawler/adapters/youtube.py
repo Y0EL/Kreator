@@ -48,9 +48,11 @@ def _parse_dt(value: str | None) -> datetime | None:
 
 
 def _fetch_caption(video_id: str, proxy: str | None) -> str:
-    key = get_settings().supadata_api_key
-    if key:
-        return _fetch_supadata(video_id, key)
+    s = get_settings()
+    if s.firecrawl_api_key:
+        return _fetch_firecrawl(video_id, s.firecrawl_api_key)
+    if s.supadata_api_key:
+        return _fetch_supadata(video_id, s.supadata_api_key)
 
     from youtube_transcript_api import YouTubeTranscriptApi
 
@@ -59,6 +61,21 @@ def _fetch_caption(video_id: str, proxy: str | None) -> str:
         video_id, languages=["id", "en"], proxies=proxies
     )
     return " ".join(seg["text"] for seg in segments).strip()
+
+
+def _fetch_firecrawl(video_id: str, key: str) -> str:
+    import httpx
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    with httpx.Client(timeout=90) as c:
+        r = c.post(
+            "https://api.firecrawl.dev/v2/scrape",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"url": url, "formats": ["markdown"]},
+        )
+        r.raise_for_status()
+        data = r.json()
+    return ((data.get("data") or {}).get("markdown") or "").strip()
 
 
 def _supadata_text(content: object) -> str:
@@ -128,11 +145,13 @@ class YouTubeAdapter(SourceAdapter):
                 f"&publishedBefore={before}&key={api_key}"
             )
             data = await self.rm.get_json(url)
-            for item in data.get("items", []):
-                video_id = item.get("id", {}).get("videoId")
-                if not video_id:
-                    continue
-                snippet = item.get("snippet", {})
+            vid_snips = [
+                (item["id"]["videoId"], item.get("snippet", {}))
+                for item in data.get("items", [])
+                if item.get("id", {}).get("videoId")
+            ]
+            stats = await self._video_stats([v for v, _ in vid_snips], api_key)
+            for video_id, snippet in vid_snips:
                 text = await self._transcript(video_id)
                 if not text or len(text) < min_chars:
                     continue
@@ -141,8 +160,29 @@ class YouTubeAdapter(SourceAdapter):
                     title=snippet.get("title"),
                     author_name=snippet.get("channelTitle"),
                     posted_at=_parse_dt(snippet.get("publishedAt")),
+                    view_count=stats.get(video_id),
                     raw_text=text,
                 )
+
+    async def _video_stats(self, video_ids: list[str], api_key: str) -> dict[str, int]:
+        if not video_ids:
+            return {}
+        url = (
+            "https://www.googleapis.com/youtube/v3/videos?part=statistics"
+            f"&id={','.join(video_ids)}&key={api_key}"
+        )
+        try:
+            data = await self.rm.get_json(url)
+        except Exception as e:
+            log.warning("youtube.stats_failed", error=str(e))
+            return {}
+        out: dict[str, int] = {}
+        for it in data.get("items", []):
+            vid = it.get("id")
+            vc = it.get("statistics", {}).get("viewCount")
+            if vid and vc is not None:
+                out[vid] = int(vc)
+        return out
 
     async def _resolve_channel(self, channel: str, api_key: str) -> str | None:
         if channel.startswith("UC"):
