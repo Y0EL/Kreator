@@ -22,6 +22,11 @@ ENRICH_USER = """Analisis cerita berikut dan keluarkan JSON dengan field:
 - tension_score: 0..1 (eskalasi/konflik/momen ganjil)
 - estimated_minutes: perkiraan durasi video jika dinarasikan (integer 5..40)
 - confidence: salah satu [high, medium, low] (high=banyak bukti/dokumen; low=legenda/pengalaman pribadi)
+- viral_score: integer 0..100, seberapa yakin cerita ini bisa viral sebagai konten horor YouTube
+- viral_label: salah satu [tinggi, sedang, rendah]
+- viral_reasons: array string, bukti konkret kenapa bisa atau tidak viral (kekuatan hook, keunikan, sisi emosional, relevansi, rasa penasaran)
+- viral_hook: 1 kalimat hook paling menjual untuk thumbnail atau judul
+- where_from: dari mana informasi cerita ini berasal, simpulkan dari bahan (mis. transkrip video YouTube, artikel berita, forum, legenda turun temurun)
 
 CERITA:
 \"\"\"{text}\"\"\"
@@ -53,15 +58,61 @@ OUTLINE_SYSTEM = (
     "verifikasi. Balas HANYA JSON valid."
 )
 
-OUTLINE_USER = """Susun outline skrip horor {minutes} menit dengan alur segmen:
-hook, pembuka, latar, kronologi, puncak ketegangan, misteri yang menggantung, penutup, cta.
-Ini cerita horor yang bikin merinding, BUKAN laporan investigasi. Pakai inti cerita untuk
+OUTLINE_USER = """Susun outline skrip horor berdurasi total sekitar {minutes} menit dengan alur
+segmen: hook, pembuka, latar, kronologi, puncak ketegangan, misteri yang menggantung, penutup,
+cta. Ini cerita horor yang bikin merinding, BUKAN laporan investigasi. Pakai inti cerita untuk
 hook yang menegangkan dan menanam rasa penasaran. JANGAN bikin segmen analisis fakta,
 metodologi, atau langkah verifikasi.
-JSON: {{"segments":[{{"name":..,"durasi":..,"poin":[..]}}]}}.
+Untuk TIAP segmen tentukan durasi dalam menit (angka, jumlah semua segmen mendekati {minutes})
+dan tone singkat. Beri porsi durasi paling besar untuk kronologi dan puncak ketegangan.
+JSON: {{"segments":[{{"name":..,"durasi":..,"tone":..,"poin":[..]}}]}}.
 
 BAHAN CERITA:
 {evidence}
+"""
+
+SEGMENT_USER = """Tulis SATU segmen dari skrip horor naratif. Keluarkan HANYA prosa naratif
+untuk segmen ini, tanpa label, tanpa nama segmen, tanpa metadata.
+
+CARA BERCERITA REFERENSI (tiru gaya dan ritme ngobrolnya, JANGAN salin kata):
+{voice_card}
+
+CONTOH POTONGAN ASLI (rasakan FEEL-nya, jangan jiplak kalimat):
+{exemplars}
+
+FACT LEDGER (SATU-SATUNYA sumber kebenaran, JANGAN mengarang fakta di luar ini):
+{ledger}
+
+SUDAH DITULIS SEBELUMNYA (lanjutkan mulus, jaga kontinuitas tone dan fakta, JANGAN mengulang):
+{previous}
+
+SEGMEN SEKARANG: {name}
+TONE: {tone}
+POIN YANG HARUS DICERITAKAN:
+{poin}
+
+TARGET PANJANG sekitar {target_words} kata. Tulis penuh sampai mendekati target, JANGAN
+kependekan dan JANGAN memotong cerita di tengah ide. Susun kronologis dari awal maju ke
+kemudian. Detail atmosferik seperti suasana, sensorik, dan emosi boleh kamu kembangkan, tapi
+JANGAN diklaim sebagai fakta baru dan JANGAN bertentangan dengan fact ledger. Sebut tempat,
+kota, tanggal, dan tahun yang nyata bila ada. Bahasa lugas dan membumi, tanpa em dash, en
+dash, titik koma.
+"""
+
+SEGMENT_EXPAND_USER = """Segmen "{name}" di bawah ini masih kependek. Perpanjang jadi sekitar
+{target_words} kata dengan menambah kedalaman naratif, detail suasana, sensorik, dan emosi,
+TANPA menambah fakta baru di luar fact ledger dan tanpa bertentangan dengannya. Pertahankan
+alur dan kalimat yang sudah ada lalu kembangkan, JANGAN menulis ulang dari nol. Keluarkan
+HANYA prosa segmen final, tanpa label. Tanpa em dash, en dash, titik koma.
+
+FACT LEDGER:
+{ledger}
+
+SUDAH DITULIS SEBELUMNYA (konteks kontinuitas):
+{previous}
+
+VERSI SEGMEN SEKARANG (perpanjang ini):
+{current}
 """
 
 DRAFT_SYSTEM = (

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.dashboard import router as dashboard_router
 from app.config import get_settings
 from app.crawler.runner import crawl_active_sources
+from app.db.init_db import init_db
 from app.db.session import SessionLocal
 from app.logging import configure_logging, get_logger
 from app.notifier.bot import dp
@@ -25,6 +26,7 @@ bot = Bot(token=settings.telegram_bot_token)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
+    await init_db()
     if settings.telegram_webhook_url:
         await bot.set_webhook(
             settings.telegram_webhook_url,

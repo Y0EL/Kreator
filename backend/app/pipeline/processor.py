@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import Priority, StoryStatus
-from app.db.models import CandidateQueue, RawItem, Story
+from app.db.models import CandidateQueue, RawItem, Story, StoryPitch
 from app.integrations import r2
 from app.logging import get_logger
 from app.pipeline import dedup, scoring
@@ -51,7 +51,7 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
     session.add(story)
     await session.flush()
 
-    enrich_story(story)
+    pitch = enrich_story(story)
     novelty = await dedup.assign_cluster(session, story)
     score = scoring.compute_score(story, novelty=novelty)
     session.add(score)
@@ -61,6 +61,17 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
         session.add(
             CandidateQueue(story_id=story.id, status=StoryStatus.queued, priority=score.priority)
         )
+        if pitch:
+            session.add(
+                StoryPitch(
+                    story_id=story.id,
+                    viral_score=pitch["viral_score"],
+                    viral_label=pitch["viral_label"],
+                    hook=pitch["hook"],
+                    reasons=pitch["reasons"],
+                    where_from=pitch["where_from"],
+                )
+            )
     else:
         story.status = StoryStatus.duplicate if not story.is_primary else StoryStatus.scored
     return story
@@ -68,14 +79,18 @@ async def process_raw_item(session: AsyncSession, item: RawItem) -> Story | None
 
 async def process_new(session: AsyncSession, limit: int = 200) -> int:
     items = await _unprocessed_raw_items(session, limit)
-    count = 0
+    stories = 0
+    candidates = 0
     for item in items:
         try:
-            if await process_raw_item(session, item) is not None:
-                count += 1
+            story = await process_raw_item(session, item)
+            if story is not None:
+                stories += 1
+                if story.status == StoryStatus.queued:
+                    candidates += 1
             await session.commit()
         except Exception as e:
             await session.rollback()
             log.error("processor.item_failed", raw_item_id=item.id, error=str(e))
-    log.info("processor.done", created=count, scanned=len(items))
-    return count
+    log.info("processor.done", candidates=candidates, stories=stories, scanned=len(items))
+    return candidates

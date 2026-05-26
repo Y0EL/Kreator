@@ -37,6 +37,12 @@ export function StoryCard({ c }: { c: Candidate }) {
             </>
           )}
         </div>
+        {c.viral_score != null && (
+          <span className="tnum mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+            Potensi viral {c.viral_score}
+            {c.viral_label ? ` · ${c.viral_label}` : ""}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <PriorityTag priority={c.priority} />

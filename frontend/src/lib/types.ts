@@ -18,6 +18,18 @@ export type Candidate = {
   priority: string | null;
   source: string | null;
   source_url: string | null;
+  viral_score: number | null;
+  viral_label: string | null;
+  viral_reasons: string[];
+  where_from: string | null;
+};
+
+export type Pitch = {
+  viral_score: number;
+  viral_label: string | null;
+  hook: string | null;
+  reasons: string[];
+  where_from: string | null;
 };
 
 export type ScoreBreakdown = {
@@ -58,6 +70,7 @@ export type StoryDetail = {
   source_url: string | null;
   posted_at: string | null;
   score: ScoreBreakdown | null;
+  pitch: Pitch | null;
   research_pack: ResearchPack | null;
   scripts: { id: number; version: number; status: string | null; drive_url: string | null }[];
 };

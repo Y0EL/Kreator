@@ -4,7 +4,6 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { compact, useApi } from "@/lib/use-api";
 import { IconPlus, IconSpinner } from "@/components/icons";
-import { ActiveJobs } from "@/components/active-jobs";
 import { WebSearchToggle } from "@/components/web-toggle";
 import { Empty, PageHeader, Skeleton } from "@/components/ui";
 
@@ -59,8 +58,6 @@ export default function YoutubePage() {
         </div>
         {msg && <p className="mt-2 text-xs text-muted">{msg}</p>}
       </div>
-
-      <ActiveJobs />
 
       <h2 className="px-5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-widest text-faint">
         Channel dipantau

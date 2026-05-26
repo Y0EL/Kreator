@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getToken } from "@/lib/api";
 import { TabBar } from "@/components/tab-bar";
+import { ActiveJobs } from "@/components/active-jobs";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto min-h-dvh max-w-md pb-28">
       {children}
+      <ActiveJobs />
       <TabBar />
     </div>
   );

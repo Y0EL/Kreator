@@ -11,13 +11,59 @@ from app.db.enums import ScriptStatus, StoryStatus
 from app.db.models import RawItem, ResearchPack, Script, Story
 from app.integrations import drive
 from app.llm import client
-from app.llm.prompts import DRAFT_SYSTEM, DRAFT_USER, OUTLINE_SYSTEM, OUTLINE_USER
+from app.llm.prompts import (
+    DRAFT_SYSTEM,
+    OUTLINE_SYSTEM,
+    OUTLINE_USER,
+    SEGMENT_EXPAND_USER,
+    SEGMENT_USER,
+)
 from app.logging import get_logger
 from app.services import progress
 from app.util.textfix import sanitize_script
 from app.voice import retrieve
 
 log = get_logger(__name__)
+
+_WPM = 135
+_WRITER_TIER = "cheap"
+_MIN_RATIO = 0.7
+_MAX_EXPANSIONS = 5
+
+
+def _seg_budgets(outline: dict, total_words: int) -> list[dict]:
+    segs = outline.get("segments") or []
+    if not segs:
+        return [{"name": "CERITA", "tone": "naratif", "poin": [], "target_words": total_words}]
+    weights: list[float] = []
+    for s in segs:
+        try:
+            w = float(s.get("durasi") or 0)
+        except (TypeError, ValueError):
+            w = 0.0
+        weights.append(w if w > 0 else 1.0)
+    tot = sum(weights) or 1.0
+    out: list[dict] = []
+    for s, w in zip(segs, weights):
+        out.append(
+            {
+                "name": str(s.get("name") or "SEGMEN"),
+                "tone": str(s.get("tone") or ""),
+                "poin": s.get("poin") or [],
+                "target_words": max(150, int(total_words * w / tot)),
+            }
+        )
+    return out
+
+
+def _tail(written: list[tuple[str, str]], max_words: int) -> str:
+    if not written:
+        return "(belum ada, ini bagian pembuka)"
+    joined = "\n\n".join(t for _, t in written)
+    words = joined.split()
+    if len(words) <= max_words:
+        return joined
+    return "... " + " ".join(words[-max_words:])
 
 
 def _evidence_text(pack: ResearchPack | None, story: Story) -> str:
@@ -102,29 +148,78 @@ async def generate_draft(
         session, persona, query_embedding=story.embedding, k=5
     )
 
-    target = max(800, int(minutes) * 170)
+    total_words = max(700, int(minutes) * _WPM)
+    ledger = _evidence_text(pack, story)
+    voice = retrieve.voice_card_text(card)
+    exem = "\n\n---\n\n".join(exemplars) if exemplars else "(tidak ada contoh)"
+    budgets = _seg_budgets(outline, total_words)
+    n = len(budgets)
 
-    def _tick(partial: str) -> None:
-        tok = client.count_tokens(partial)
-        pct = 85 + min(9, int(9 * tok / target))
-        progress.step(f"Menulis draft, {tok} token", pct, story_id=story.id)
+    written: list[tuple[str, str]] = []
+    for i, seg in enumerate(budgets):
+        progress.step(
+            f"Menulis segmen {i + 1}/{n}: {seg['name']}",
+            80 + int(11 * i / n),
+            story_id=story.id,
+        )
+        text = await asyncio.to_thread(
+            client.complete,
+            system=DRAFT_SYSTEM,
+            user=SEGMENT_USER.format(
+                voice_card=voice,
+                exemplars=exem,
+                ledger=ledger,
+                previous=_tail(written, 700),
+                name=seg["name"],
+                tone=seg["tone"] or "naratif, menegangkan",
+                poin="\n".join(f"- {p}" for p in seg["poin"]) or "-",
+                target_words=seg["target_words"],
+            ),
+            tier=_WRITER_TIER,
+            temperature=0.8,
+            max_tokens=min(8000, seg["target_words"] * 4 + 200),
+        )
+        written.append((seg["name"], sanitize_script(text).strip()))
 
-    draft_text = await asyncio.to_thread(
-        client.complete_stream,
-        system=DRAFT_SYSTEM,
-        user=DRAFT_USER.format(
-            minutes=minutes,
-            persona=persona,
-            voice_card=retrieve.voice_card_text(card),
-            exemplars="\n\n---\n\n".join(exemplars) if exemplars else "(tidak ada contoh)",
-            outline=json.dumps(outline, ensure_ascii=False, indent=2),
-            evidence=_evidence_text(pack, story),
-        ),
-        tier="quality",
-        temperature=0.8,
-        on_progress=_tick,
+    progress.step("Cek panjang dan rapikan", 92, story_id=story.id)
+    expansions = 0
+    for i, seg in enumerate(budgets):
+        if expansions >= _MAX_EXPANSIONS:
+            break
+        name, text = written[i]
+        wc = len(text.split())
+        if wc < int(seg["target_words"] * _MIN_RATIO):
+            expanded = await asyncio.to_thread(
+                client.complete,
+                system=DRAFT_SYSTEM,
+                user=SEGMENT_EXPAND_USER.format(
+                    name=name,
+                    target_words=seg["target_words"],
+                    ledger=ledger,
+                    previous=_tail(written[:i], 700),
+                    current=text,
+                ),
+                tier=_WRITER_TIER,
+                temperature=0.8,
+                max_tokens=min(8000, seg["target_words"] * 4 + 200),
+            )
+            expanded = sanitize_script(expanded).strip()
+            if len(expanded.split()) > wc:
+                written[i] = (name, expanded)
+                expansions += 1
+
+    draft_text = sanitize_script(
+        "\n\n".join(f"[SEGMEN: {name}]\n{text}" for name, text in written)
     )
-    draft_text = sanitize_script(draft_text)
+    word_count = len(draft_text.split())
+    log.info(
+        "script.draft_segments",
+        story_id=story.id,
+        segments=n,
+        words=word_count,
+        target=total_words,
+        expansions=expansions,
+    )
 
     next_version = (
         await session.scalar(

@@ -21,40 +21,40 @@ _scheduler: AsyncIOScheduler | None = None
 
 async def run_collection() -> None:
     progress.start("crawl", "Mengumpulkan cerita")
-    progress.step("Crawl sumber", 25)
+    progress.step("Crawl sumber", 20)
     async with SessionLocal() as session:
         jobs = await crawl_active_sources(session)
-    progress.step("Memproses item baru", 70)
+    progress.step("Filter dan skor kandidat", 55)
     async with SessionLocal() as session:
-        created = await process_new(session)
+        candidates = await process_new(session)
     new_items = sum(getattr(j, "items_new", 0) for j in jobs)
-    progress.done(f"{created} kandidat baru")
+    sent = 0
+    if candidates > 0:
+        progress.step("Kirim kandidat ke Telegram", 85)
+        async with SessionLocal() as session:
+            sent = await send_digest(session, unsent_only=True)
+    progress.done(f"{candidates} kandidat lolos filter")
     try:
-        await send_text(
-            f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru, {created} kandidat baru."
-        )
+        if candidates > 0:
+            await send_text(
+                f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
+                f"{candidates} kandidat lolos filter. Digest dikirim, tinggal approve."
+            )
+        else:
+            await send_text(
+                f"🕷️ Crawl kelar. {len(jobs)} sumber, {new_items} item baru, "
+                "belum ada yang lolos filter."
+            )
     except Exception:
         pass
-    log.info("schedule.collection", jobs=len(jobs), created=created)
-
-
-async def run_digest_job() -> None:
-    async with SessionLocal() as session:
-        sent = await send_digest(session)
-    log.info("schedule.digest", sent=sent)
+    log.info("schedule.collection", jobs=len(jobs), candidates=candidates, sent=sent)
 
 
 def status() -> dict:
     s = _scheduler
     tz = get_settings().tz
     now = datetime.now(ZoneInfo(tz))
-    hour = now.hour
-    if 1 <= hour < 10:
-        mode = "Waktu approval"
-    elif 10 <= hour < 22:
-        mode = "Mengumpulkan cerita"
-    else:
-        mode = "Istirahat"
+    mode = "Crawl tiap 3 jam"
     jobs = []
     if s:
         for j in s.get_jobs():
@@ -75,15 +75,8 @@ def build_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=tz)
     scheduler.add_job(
         run_collection,
-        CronTrigger(hour="10-21/2", minute=0, timezone=tz),
+        CronTrigger(hour="*/3", minute=0, timezone=tz),
         id="collection",
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(
-        run_digest_job,
-        CronTrigger(hour=1, minute=0, timezone=tz),
-        id="digest",
         max_instances=1,
         coalesce=True,
     )

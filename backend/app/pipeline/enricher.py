@@ -11,7 +11,7 @@ log = get_logger(__name__)
 _MAX_CHARS = 12000
 
 
-def enrich_story(story: Story) -> None:
+def enrich_story(story: Story) -> dict | None:
     text = story.cleaned_text[:_MAX_CHARS]
     try:
         data = client.complete_json(
@@ -19,7 +19,7 @@ def enrich_story(story: Story) -> None:
         )
     except Exception as e:
         log.error("enrich.failed", story_id=getattr(story, "id", None), error=str(e))
-        return
+        return None
 
     story.summary = data.get("summary")
     story.topic = data.get("topic")
@@ -34,6 +34,15 @@ def enrich_story(story: Story) -> None:
         story.embedding = client.embed([text])[0]
     except Exception as e:
         log.warning("enrich.embed_failed", error=str(e))
+
+    vs = _as_int(data.get("viral_score")) or 0
+    return {
+        "viral_score": max(0, min(vs, 100)),
+        "viral_label": data.get("viral_label"),
+        "hook": data.get("viral_hook"),
+        "reasons": data.get("viral_reasons") or [],
+        "where_from": data.get("where_from"),
+    }
 
 
 def _as_float(v: object) -> float | None:

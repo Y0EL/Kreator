@@ -4,7 +4,6 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { StoryCard } from "@/components/story-card";
-import { ActiveJobs } from "@/components/active-jobs";
 import { SystemStatus } from "@/components/system-status";
 import { Empty, PageHeader, Skeleton, StatBlock } from "@/components/ui";
 import { IconActivity, IconSend, IconStack } from "@/components/icons";
@@ -79,8 +78,6 @@ export default function HomePage() {
         <QuickAction label="Proses" Icon={IconStack} busy={busy === "process"} onClick={() => trigger("process")} />
         <QuickAction label="Digest" Icon={IconSend} busy={busy === "digest"} onClick={() => trigger("digest")} />
       </div>
-
-      <ActiveJobs />
 
       <h2 className="px-5 pt-8 pb-1 text-[11px] font-semibold uppercase tracking-widest text-faint">
         Kandidat teratas

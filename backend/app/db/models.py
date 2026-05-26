@@ -112,6 +112,7 @@ class Story(Base, TimestampMixin):
     score: Mapped[StoryScore | None] = relationship(back_populates="story", uselist=False)
     candidate: Mapped[CandidateQueue | None] = relationship(back_populates="story", uselist=False)
     research_pack: Mapped[ResearchPack | None] = relationship(back_populates="story", uselist=False)
+    pitch: Mapped[StoryPitch | None] = relationship(back_populates="story", uselist=False)
     scripts: Mapped[list[Script]] = relationship(back_populates="story")
 
 
@@ -146,6 +147,20 @@ class CandidateQueue(Base, TimestampMixin):
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     story: Mapped[Story] = relationship(back_populates="candidate")
+
+
+class StoryPitch(Base, TimestampMixin):
+    __tablename__ = "story_pitches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    story_id: Mapped[int] = mapped_column(ForeignKey("stories.id"), unique=True)
+    viral_score: Mapped[int] = mapped_column(Integer, default=0)
+    viral_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    hook: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reasons: Mapped[list] = mapped_column(JSONB, default=list)
+    where_from: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    story: Mapped[Story] = relationship(back_populates="pitch")
 
 
 class ResearchPack(Base, TimestampMixin):

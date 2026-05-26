@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.enums import StoryStatus
-from app.db.models import CandidateQueue, RawItem, Story, StoryScore
+from app.db.models import CandidateQueue, RawItem, Story, StoryPitch, StoryScore
 from app.logging import get_logger
 
 log = get_logger(__name__)
@@ -64,7 +64,12 @@ def _domain(url: str | None) -> str:
     return urlsplit(url).netloc or url
 
 
-def _format_candidate(story: Story, score: StoryScore | None, source_url: str | None) -> str:
+def _format_candidate(
+    story: Story,
+    score: StoryScore | None,
+    source_url: str | None,
+    pitch: StoryPitch | None = None,
+) -> str:
     prio = _val(score.priority) if score else "-"
     fs = round(score.final_score, 2) if score else "-"
     conf = _val(story.confidence)
@@ -72,13 +77,21 @@ def _format_candidate(story: Story, score: StoryScore | None, source_url: str | 
     topic = story.topic or "-"
     summary = html.escape((story.summary or "")[:420])
     title = html.escape(story.title or "Tanpa judul")
-    return (
-        f"🔥 <b>{title}</b>\n"
-        f"📊 Skor {fs} . Prioritas {prio} . Confidence {conf}\n"
-        f"⏱ sekitar {dur} menit . 🏷 {topic}\n"
-        f"🔗 Sumber: {html.escape(_domain(source_url))}\n\n"
-        f"{summary}"
-    )
+    lines = [
+        f"🔥 <b>{title}</b>",
+        f"📊 Skor {fs} . Prioritas {prio} . Confidence {conf}",
+        f"⏱ sekitar {dur} menit . 🏷 {topic}",
+        f"🔗 Sumber: {html.escape(_domain(source_url))}",
+    ]
+    if pitch:
+        vl = html.escape(pitch.viral_label or "-")
+        lines.append(f"📈 Potensi viral {pitch.viral_score}/100 ({vl})")
+        for r in (pitch.reasons or [])[:3]:
+            lines.append(f"  • {html.escape(str(r))}")
+        if pitch.where_from:
+            lines.append(f"📍 Info dari: {html.escape(str(pitch.where_from)[:160])}")
+    body = "\n".join(lines)
+    return f"{body}\n\n{summary}"
 
 
 async def send_document(
@@ -103,30 +116,34 @@ async def send_text(text: str) -> dict:
     )
 
 
-async def send_digest(session: AsyncSession, limit: int = 10) -> int:
+async def send_digest(
+    session: AsyncSession, limit: int = 10, unsent_only: bool = False
+) -> int:
     s = get_settings()
-    rows = (
-        await session.execute(
-            select(Story, StoryScore, RawItem.source_url)
-            .join(StoryScore, StoryScore.story_id == Story.id)
-            .join(CandidateQueue, CandidateQueue.story_id == Story.id)
-            .join(RawItem, RawItem.id == Story.raw_item_id)
-            .where(CandidateQueue.status == StoryStatus.queued)
-            .order_by(StoryScore.final_score.desc())
-            .limit(limit)
-        )
-    ).all()
+    stmt = (
+        select(Story, StoryScore, RawItem.source_url, StoryPitch)
+        .join(StoryScore, StoryScore.story_id == Story.id)
+        .join(CandidateQueue, CandidateQueue.story_id == Story.id)
+        .join(RawItem, RawItem.id == Story.raw_item_id)
+        .outerjoin(StoryPitch, StoryPitch.story_id == Story.id)
+        .where(CandidateQueue.status == StoryStatus.queued)
+    )
+    if unsent_only:
+        stmt = stmt.where(CandidateQueue.sent_in_digest_at.is_(None))
+    stmt = stmt.order_by(StoryScore.final_score.desc()).limit(limit)
+    rows = (await session.execute(stmt)).all()
     if not rows:
-        await send_text("Belum ada kandidat untuk digest.")
+        if not unsent_only:
+            await send_text("Belum ada kandidat untuk digest.")
         return 0
 
     await send_text(f"📋 Digest: {len(rows)} kandidat teratas. Pilih lewat tombol di tiap cerita.")
-    for story, score, source_url in rows:
+    for story, score, source_url, pitch in rows:
         resp = await _post(
             "sendMessage",
             {
                 "chat_id": s.telegram_group_chat_id,
-                "text": _format_candidate(story, score, source_url),
+                "text": _format_candidate(story, score, source_url, pitch),
                 "parse_mode": "HTML",
                 "reply_markup": _decision_keyboard(story.id),
                 "disable_notification": True,

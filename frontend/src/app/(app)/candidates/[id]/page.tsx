@@ -157,6 +157,37 @@ export default function StoryPage() {
         <p className="text-sm leading-relaxed text-fg">{s.summary || "-"}</p>
       </Section>
 
+      {s.pitch && (
+        <Section title="Potensi viral">
+          <div className="flex items-baseline gap-2">
+            <span className="tnum text-3xl font-bold text-accent">{s.pitch.viral_score}</span>
+            <span className="text-xs text-faint">/100</span>
+            {s.pitch.viral_label && (
+              <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-accent">
+                {s.pitch.viral_label}
+              </span>
+            )}
+          </div>
+          {s.pitch.hook && (
+            <p className="mt-3 text-sm font-medium leading-relaxed text-fg">{s.pitch.hook}</p>
+          )}
+          {s.pitch.reasons?.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-faint">
+                Bukti / alasan
+              </p>
+              <Bullets items={s.pitch.reasons} />
+            </div>
+          )}
+          {s.pitch.where_from && (
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              <span className="font-semibold text-faint">Info dari: </span>
+              {s.pitch.where_from}
+            </p>
+          )}
+        </Section>
+      )}
+
       {s.research_pack && (
         <>
           {s.research_pack.angle && (

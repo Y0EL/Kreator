@@ -20,6 +20,7 @@ from app.db.models import (
     Script,
     Source,
     Story,
+    StoryPitch,
     StoryScore,
 )
 from app.db.session import SessionLocal, get_session
@@ -116,11 +117,12 @@ async def candidates(
     priority: str | None = None, session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
     stmt = (
-        select(Story, StoryScore, RawItem.source_url, Source.name)
+        select(Story, StoryScore, RawItem.source_url, Source.name, StoryPitch)
         .join(StoryScore, StoryScore.story_id == Story.id)
         .join(CandidateQueue, CandidateQueue.story_id == Story.id)
         .join(RawItem, RawItem.id == Story.raw_item_id)
-        .join(Source, Source.id == RawItem.source_id)
+        .outerjoin(Source, Source.id == RawItem.source_id)
+        .outerjoin(StoryPitch, StoryPitch.story_id == Story.id)
         .where(CandidateQueue.status == StoryStatus.queued)
         .order_by(StoryScore.final_score.desc())
         .limit(50)
@@ -140,8 +142,12 @@ async def candidates(
             "priority": _val(sc.priority),
             "source": src_name,
             "source_url": src_url,
+            "viral_score": pitch.viral_score if pitch else None,
+            "viral_label": pitch.viral_label if pitch else None,
+            "viral_reasons": pitch.reasons if pitch else [],
+            "where_from": pitch.where_from if pitch else None,
         }
-        for st, sc, src_url, src_name in rows
+        for st, sc, src_url, src_name, pitch in rows
     ]
 
 
@@ -152,6 +158,7 @@ async def story_detail(story_id: int, session: AsyncSession = Depends(get_sessio
         raise HTTPException(status_code=404, detail="not found")
     score = await session.scalar(select(StoryScore).where(StoryScore.story_id == story_id))
     pack = await session.scalar(select(ResearchPack).where(ResearchPack.story_id == story_id))
+    pitch = await session.scalar(select(StoryPitch).where(StoryPitch.story_id == story_id))
     raw = await session.get(RawItem, story.raw_item_id)
     scripts = (
         await session.scalars(
@@ -186,6 +193,17 @@ async def story_detail(story_id: int, session: AsyncSession = Depends(get_sessio
         "source_url": raw.source_url if raw else None,
         "posted_at": raw.posted_at if raw else None,
         "score": breakdown,
+        "pitch": (
+            {
+                "viral_score": pitch.viral_score,
+                "viral_label": pitch.viral_label,
+                "hook": pitch.hook,
+                "reasons": pitch.reasons,
+                "where_from": pitch.where_from,
+            }
+            if pitch
+            else None
+        ),
         "research_pack": (
             {
                 "core_summary": pack.core_summary,

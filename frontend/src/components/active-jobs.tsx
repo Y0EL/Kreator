@@ -50,14 +50,15 @@ export function ActiveJobs() {
   if (jobs.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3 px-5 pt-4">
-      {jobs.map((j) => {
-        const err = j.status === "error";
-        return (
-          <div
-            key={j.id}
-            className={`card rise p-4 ${err ? "border-accent bg-accent-soft" : ""}`}
-          >
+    <div className="pointer-events-none fixed inset-x-0 z-30 px-4 bottom-[calc(5.25rem+env(safe-area-inset-bottom))]">
+      <div className="pointer-events-auto mx-auto flex max-w-md flex-col gap-2">
+        {jobs.slice(0, 3).map((j) => {
+          const err = j.status === "error";
+          return (
+            <div
+              key={j.id}
+              className={`card rise p-3.5 ${err ? "border-accent bg-accent-soft" : ""}`}
+            >
             <div className="flex items-center gap-2">
               {j.status === "running" ? (
                 <IconSpinner size={15} className="animate-spin text-accent" />
@@ -90,12 +91,13 @@ export function ActiveJobs() {
               </div>
             )}
 
-            <div className={`mt-2 text-xs ${err ? "font-medium text-accent" : "text-muted"}`}>
-              {err ? j.error || "Gagal diproses" : j.stage}
+              <div className={`mt-2 text-xs ${err ? "font-medium text-accent" : "text-muted"}`}>
+                {err ? j.error || "Gagal diproses" : j.stage}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

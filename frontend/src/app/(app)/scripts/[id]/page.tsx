@@ -1,40 +1,75 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { useApi } from "@/lib/use-api";
 import { IconChevron, IconRefresh } from "@/components/icons";
-import { ActiveJobs } from "@/components/active-jobs";
 import { WebSearchToggle } from "@/components/web-toggle";
 import { Skeleton } from "@/components/ui";
+import type { ScriptItem } from "@/lib/types";
 
 export default function ReaderPage() {
   const id = Number(useParams().id);
   const router = useRouter();
-  const { data, loading } = useApi(() => api.scripts(id), [id]);
+  const [scripts, setScripts] = useState<ScriptItem[] | null>(null);
   const [v, setV] = useState(0);
   const [regen, setRegen] = useState(false);
   const [web, setWeb] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const awaiting = useRef(false);
+  const topVersion = useRef(0);
 
-  const scripts = data || [];
-  const cur = scripts[v];
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function load() {
+      try {
+        const d = await api.scripts(id);
+        if (!alive) return;
+        setScripts(d);
+        const top = d[0]?.version ?? 0;
+        if (awaiting.current && top > topVersion.current) {
+          awaiting.current = false;
+          setV(0);
+          setRegen(false);
+          setMsg("Versi baru udah jadi.");
+        }
+        topVersion.current = Math.max(topVersion.current, top);
+        const busy = awaiting.current || d.length === 0;
+        timer = setTimeout(load, busy ? 3500 : 12000);
+        return;
+      } catch {
+        /* ignore */
+      }
+      timer = setTimeout(load, 6000);
+    }
+    load();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const list = scripts || [];
+  const cur = list[v];
 
   async function doRegen() {
     setRegen(true);
     setMsg(null);
+    topVersion.current = list[0]?.version ?? 0;
+    awaiting.current = true;
     try {
       await api.regenerate(id, undefined, web);
-      setMsg("Lagi nulis ulang. Versi baru nyusul ke grup Telegram, refresh bentar lagi.");
+      setMsg("Lagi nulis ulang. Progress ada di indikator bawah, versi baru nongol otomatis.");
     } catch {
       setMsg("Gagal regenerate.");
-    } finally {
-      setTimeout(() => setRegen(false), 1500);
+      awaiting.current = false;
+      setRegen(false);
     }
   }
 
-  if (loading)
+  if (scripts === null)
     return (
       <div className="px-5 pt-12">
         <Skeleton className="h-6 w-1/2" />
@@ -63,11 +98,9 @@ export default function ReaderPage() {
         <WebSearchToggle on={web} set={setWeb} />
       </div>
 
-      <ActiveJobs />
-
-      {scripts.length > 1 && (
+      {list.length > 1 && (
         <div className="flex gap-2 px-5 pb-3">
-          {scripts.map((s, i) => (
+          {list.map((s, i) => (
             <button
               key={s.id}
               onClick={() => setV(i)}
